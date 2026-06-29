@@ -1,0 +1,116 @@
+// Esquema de Prisma para ObraApp
+// Documentación: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  // URL con pooling (pgBouncer) para la app en runtime.
+  url       = env("DATABASE_URL")
+  // URL de conexión directa para migraciones.
+  directUrl = env("DIRECT_URL")
+}
+
+// ----------------------------------------------------------------------------
+// Autenticación (NextAuth + Prisma Adapter)
+// ----------------------------------------------------------------------------
+
+model User {
+  id            String        @id @default(cuid())
+  name          String?
+  email         String        @unique
+  emailVerified DateTime?
+  image         String?
+  createdAt     DateTime      @default(now())
+  accounts      Account[]
+  sessions      Session[]
+  presupuestos  Presupuesto[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ----------------------------------------------------------------------------
+// Dominio de negocio: presupuestos
+// ----------------------------------------------------------------------------
+
+model Presupuesto {
+  id            String            @id @default(cuid())
+  numero        Int
+  titulo        String
+  clienteNombre String
+  clienteEmail  String?
+  clienteTel    String?
+  // Estado: borrador | enviado | firmado | cancelado
+  estado        String            @default("borrador")
+  total         Float             @default(0)
+  notas         String?
+  tokenFirma    String?           @unique
+  firmadoAt     DateTime?
+  creadoAt      DateTime          @default(now())
+  actualizadoAt DateTime          @updatedAt
+  userId        String
+  user          User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items         ItemPresupuesto[]
+}
+
+model ItemPresupuesto {
+  id             String      @id @default(cuid())
+  descripcion    String
+  cantidad       Float
+  precioUnitario Float
+  subtotal       Float
+  // Categoría: electricidad | plomeria | gas | albanileria
+  categoria      String
+  presupuestoId  String
+  presupuesto    Presupuesto @relation(fields: [presupuestoId], references: [id], onDelete: Cascade)
+}
+
+// ----------------------------------------------------------------------------
+// Catálogo comunitario de tareas de referencia
+// ----------------------------------------------------------------------------
+
+model TareaComunitaria {
+  id          String   @id @default(cuid())
+  descripcion String
+  // Unidad: hora, m2, m lineal, unidad, etc.
+  unidad      String
+  precioRef   Float?
+  // Categoría: electricidad | plomeria | gas | albanileria
+  categoria   String
+  activa      Boolean  @default(true)
+  creadoAt    DateTime @default(now())
+}
