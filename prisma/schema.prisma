@@ -18,15 +18,18 @@ datasource db {
 // ----------------------------------------------------------------------------
 
 model User {
-  id            String        @id @default(cuid())
-  name          String?
-  email         String        @unique
-  emailVerified DateTime?
-  image         String?
-  createdAt     DateTime      @default(now())
-  accounts      Account[]
-  sessions      Session[]
-  presupuestos  Presupuesto[]
+  id             String        @id @default(cuid())
+  name           String?
+  email          String        @unique
+  emailVerified  DateTime?
+  image          String?
+  // Contraseña hasheada con bcrypt. Es opcional porque los usuarios que
+  // entran con Google (OAuth) no tienen contraseña local.
+  hashedPassword String?
+  createdAt      DateTime      @default(now())
+  accounts       Account[]
+  sessions       Session[]
+  presupuestos   Presupuesto[]
 }
 
 model Account {
