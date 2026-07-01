@@ -16,6 +16,13 @@ export const registroSchema = z.object({
 });
 export type RegistroInput = z.infer<typeof registroSchema>;
 
+// Onboarding (1 paso): nombre completo y país.
+export const onboardingSchema = z.object({
+  nombre: z.string().trim().min(1, "Ingresá tu nombre completo.").max(120),
+  pais: z.string().trim().min(1, "Elegí tu país.").max(80),
+});
+export type OnboardingInput = z.infer<typeof onboardingSchema>;
+
 // Login por credenciales.
 export const loginSchema = z.object({
   email: z.string().trim().toLowerCase().email(),

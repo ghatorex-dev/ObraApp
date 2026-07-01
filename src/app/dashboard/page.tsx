@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { FileText, Plus } from "lucide-react";
 
@@ -49,6 +50,17 @@ export default async function DashboardPage() {
   const session = await getServerSession(authOptions);
   const userId = session?.user?.id;
   const nombre = session?.user?.name ?? session?.user?.email ?? "";
+
+  // Redirección por ESTADO de onboarding (no por auth: la auth la maneja el
+  // middleware). Si no completó el onboarding, lo mandamos ahí. No hay loop:
+  // /onboarding redirige a /dashboard solo cuando SÍ está completo.
+  if (userId) {
+    const usuario = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { onboardingComplete: true },
+    });
+    if (!usuario?.onboardingComplete) redirect("/onboarding");
+  }
 
   // Presupuestos recientes del usuario (vacío si no hay ninguno).
   const presupuestos = userId

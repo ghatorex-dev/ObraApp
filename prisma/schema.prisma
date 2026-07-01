@@ -34,6 +34,14 @@ model User {
   image          String?
   // Contraseña hasheada con bcrypt. Opcional: los usuarios de Google no tienen.
   hashedPassword String?
+  // Plan comercial: "free" | "pro".
+  plan               String    @default("free")
+  // Vencimiento del plan Pro (null si es Free o sin vencimiento).
+  planExpiresAt      DateTime?
+  // Onboarding completado (nombre + país).
+  onboardingComplete Boolean   @default(false)
+  // País del usuario (Argentina por defecto en el onboarding).
+  country            String?
   createdAt      DateTime      @default(now())
   accounts       Account[]
   sessions       Session[]
@@ -89,8 +97,13 @@ model Presupuesto {
   estado        String            @default("borrador")
   total         Float             @default(0)
   notas         String?
+  // Presupuesto de ejemplo sembrado en el onboarding: no cuenta para el
+  // límite del plan Free y no se puede descargar en PDF.
+  esEjemplo     Boolean           @default(false)
   tokenFirma    String?           @unique
   firmadoAt     DateTime?
+  // IP del cliente registrada al momento de firmar.
+  clienteIp     String?
   creadoAt      DateTime          @default(now())
   actualizadoAt DateTime          @updatedAt
   userId        String

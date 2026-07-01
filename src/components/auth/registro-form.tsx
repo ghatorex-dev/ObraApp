@@ -62,7 +62,8 @@ export function RegistroForm() {
       return;
     }
 
-    router.push("/dashboard");
+    // Cuenta nueva: la mandamos al onboarding.
+    router.push("/onboarding");
     router.refresh();
   }
 

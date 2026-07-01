@@ -24,7 +24,8 @@ export async function middleware(request: NextRequest) {
   });
   const autenticado = Boolean(token);
 
-  const esRutaProtegida = pathname.startsWith("/dashboard");
+  const esRutaProtegida =
+    pathname.startsWith("/dashboard") || pathname.startsWith("/onboarding");
   const esRutaAuth = pathname === "/login" || pathname === "/registro";
 
   // Sin sesión intentando entrar a una ruta protegida -> a /login,
@@ -47,5 +48,11 @@ export async function middleware(request: NextRequest) {
 
 // Solo ejecutamos el middleware en las rutas que nos interesan.
 export const config = {
-  matcher: ["/dashboard", "/dashboard/:path*", "/login", "/registro"],
+  matcher: [
+    "/dashboard",
+    "/dashboard/:path*",
+    "/onboarding",
+    "/login",
+    "/registro",
+  ],
 };
