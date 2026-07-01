@@ -1,8 +1,11 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
+import { Plus } from "lucide-react";
 
 import { authOptions } from "@/lib/auth";
+import { Button } from "@/components/ui/button";
 import { LogoutButton } from "@/components/auth/logout-button";
 
 export const metadata: Metadata = {
@@ -34,9 +37,14 @@ export default async function DashboardPage() {
           Hola{nombre ? `, ${nombre}` : ""} 👋
         </h1>
         <p className="text-sm text-muted-foreground">
-          Tu panel está en construcción. Pronto vas a poder crear y gestionar
-          tus presupuestos desde acá.
+          Empezá creando tu primer presupuesto.
         </p>
+        <Button asChild size="lg" className="mt-4 gap-2">
+          <Link href="/dashboard/presupuestos/nuevo">
+            <Plus className="h-4 w-4" />
+            Crear presupuesto
+          </Link>
+        </Button>
       </main>
     </div>
   );
