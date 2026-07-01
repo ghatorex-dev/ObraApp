@@ -25,7 +25,9 @@ export async function middleware(request: NextRequest) {
   const autenticado = Boolean(token);
 
   const esRutaProtegida =
-    pathname.startsWith("/dashboard") || pathname.startsWith("/onboarding");
+    pathname.startsWith("/dashboard") ||
+    pathname.startsWith("/onboarding") ||
+    pathname.startsWith("/admin");
   const esRutaAuth = pathname === "/login" || pathname === "/registro";
 
   // Sin sesión intentando entrar a una ruta protegida -> a /login,
@@ -52,6 +54,8 @@ export const config = {
     "/dashboard",
     "/dashboard/:path*",
     "/onboarding",
+    "/admin",
+    "/admin/:path*",
     "/login",
     "/registro",
   ],
