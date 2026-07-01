@@ -40,13 +40,19 @@ export const crearPresupuestoSchema = z.object({
     .trim()
     .min(1, "Ingresá el nombre del cliente.")
     .max(120),
-  clienteEmail: z
-    .string()
-    .trim()
-    .toLowerCase()
-    .email("Email de cliente inválido.")
-    .optional()
-    .or(z.literal("")),
+  // El email del cliente es opcional. Normalizamos vacío o solo espacios a
+  // undefined ANTES de validar el formato, así "", "   " o ausente no dan
+  // error; solo se valida el formato cuando realmente hay un email.
+  clienteEmail: z.preprocess(
+    (valor) =>
+      typeof valor === "string" && valor.trim() === "" ? undefined : valor,
+    z
+      .string()
+      .trim()
+      .toLowerCase()
+      .email("Email de cliente inválido.")
+      .optional(),
+  ),
   clienteTel: z.string().trim().max(40).optional().or(z.literal("")),
   notas: z.string().trim().max(2000).optional().or(z.literal("")),
   items: z
