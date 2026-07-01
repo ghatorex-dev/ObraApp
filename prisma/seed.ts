@@ -8,38 +8,6 @@ import { PrismaClient, type Prisma } from "@prisma/client";
 const prisma = new PrismaClient();
 
 const tareas: Prisma.TareaComunitariaCreateManyInput[] = [
-  // ----------------------------- Electricidad -----------------------------
-  {
-    descripcion: "Instalación de boca de toma corriente",
-    unidad: "unidad",
-    precioRef: 12000,
-    categoria: "electricidad",
-  },
-  {
-    descripcion: "Tendido de cableado para circuito nuevo",
-    unidad: "m lineal",
-    precioRef: 2500,
-    categoria: "electricidad",
-  },
-  {
-    descripcion: "Instalación de tablero eléctrico con térmica y disyuntor",
-    unidad: "unidad",
-    precioRef: 85000,
-    categoria: "electricidad",
-  },
-  {
-    descripcion: "Colocación de artefacto de iluminación",
-    unidad: "unidad",
-    precioRef: 9000,
-    categoria: "electricidad",
-  },
-  {
-    descripcion: "Revisión y diagnóstico de instalación eléctrica",
-    unidad: "hora",
-    precioRef: 15000,
-    categoria: "electricidad",
-  },
-
   // ------------------------------- Plomería -------------------------------
   {
     descripcion: "Instalación de grifería de cocina o baño",
@@ -134,6 +102,38 @@ const tareas: Prisma.TareaComunitariaCreateManyInput[] = [
     unidad: "hora",
     precioRef: 9000,
     categoria: "albanileria",
+  },
+
+  // ------------------------------- Pintura --------------------------------
+  {
+    descripcion: "Pintura de interiores con látex (dos manos)",
+    unidad: "m2",
+    precioRef: 3500,
+    categoria: "pintura",
+  },
+  {
+    descripcion: "Pintura de frente o exteriores",
+    unidad: "m2",
+    precioRef: 5000,
+    categoria: "pintura",
+  },
+  {
+    descripcion: "Enduido, lijado y preparación de pared",
+    unidad: "m2",
+    precioRef: 2500,
+    categoria: "pintura",
+  },
+  {
+    descripcion: "Aplicación de esmalte sintético en aberturas",
+    unidad: "m2",
+    precioRef: 4000,
+    categoria: "pintura",
+  },
+  {
+    descripcion: "Tratamiento antihumedad y sellado antihongos",
+    unidad: "m2",
+    precioRef: 4500,
+    categoria: "pintura",
   },
 ];
 

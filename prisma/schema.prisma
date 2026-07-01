@@ -90,14 +90,22 @@ model Presupuesto {
   items         ItemPresupuesto[]
 }
 
+// Categorías de oficio admitidas. El enum garantiza que la base solo
+// acepte estos valores (plomeria | gas | albanileria | pintura).
+enum Categoria {
+  plomeria
+  gas
+  albanileria
+  pintura
+}
+
 model ItemPresupuesto {
   id             String      @id @default(cuid())
   descripcion    String
   cantidad       Float
   precioUnitario Float
   subtotal       Float
-  // Categoría: electricidad | plomeria | gas | albanileria
-  categoria      String
+  categoria      Categoria
   presupuestoId  String
   presupuesto    Presupuesto @relation(fields: [presupuestoId], references: [id], onDelete: Cascade)
 }
@@ -107,13 +115,12 @@ model ItemPresupuesto {
 // ----------------------------------------------------------------------------
 
 model TareaComunitaria {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   descripcion String
   // Unidad: hora, m2, m lineal, unidad, etc.
   unidad      String
   precioRef   Float?
-  // Categoría: electricidad | plomeria | gas | albanileria
-  categoria   String
-  activa      Boolean  @default(true)
-  creadoAt    DateTime @default(now())
+  categoria   Categoria
+  activa      Boolean   @default(true)
+  creadoAt    DateTime  @default(now())
 }
