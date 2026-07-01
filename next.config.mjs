@@ -39,6 +39,12 @@ const securityHeaders = [
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // pdfkit (y su dependencia fontkit) leen archivos con readFileSync y usan
+  // paquetes opcionales como iconv-lite. Mantenerlo externo evita que webpack
+  // lo empaquete y rompa esas rutas / genere warnings de módulos no resueltos.
+  experimental: {
+    serverComponentsExternalPackages: ["pdfkit"],
+  },
   async headers() {
     return [
       {
