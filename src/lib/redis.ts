@@ -1,23 +1,33 @@
 import Redis from "ioredis";
 
-// Cliente único de Redis (ioredis) reutilizado entre recargas en desarrollo.
+// Cliente de Redis (ioredis) creado de forma perezosa y reutilizado entre
+// recargas en desarrollo. Si REDIS_URL no está configurada, devolvemos null
+// para que la app funcione igual (el rate limiting queda desactivado).
 const globalForRedis = globalThis as unknown as {
-  redis: Redis | undefined;
+  redis: Redis | null | undefined;
 };
 
-// La URL se toma exclusivamente de la variable de entorno REDIS_URL.
-const redisUrl = process.env.REDIS_URL;
+export function getRedis(): Redis | null {
+  if (globalForRedis.redis !== undefined) {
+    return globalForRedis.redis;
+  }
 
-export const redis =
-  globalForRedis.redis ??
-  (redisUrl
-    ? new Redis(redisUrl, { maxRetriesPerRequest: 3 })
-    : (() => {
-        throw new Error(
-          "Falta la variable de entorno REDIS_URL. Cargala en .env.local.",
-        );
-      })());
+  const url = process.env.REDIS_URL;
+  if (!url) {
+    globalForRedis.redis = null;
+    return null;
+  }
 
-if (process.env.NODE_ENV !== "production") {
-  globalForRedis.redis = redis;
+  const cliente = new Redis(url, {
+    maxRetriesPerRequest: 2,
+    // No frenamos la app si Redis no está disponible.
+    lazyConnect: false,
+  });
+  // Evitamos que un error de conexión tire un throw no capturado.
+  cliente.on("error", (error) => {
+    console.error("Error de conexión a Redis:", error.message);
+  });
+
+  globalForRedis.redis = cliente;
+  return cliente;
 }

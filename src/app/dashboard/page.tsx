@@ -1,26 +1,76 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { getServerSession } from "next-auth";
-import { Plus } from "lucide-react";
+import { FileText, Plus } from "lucide-react";
 
 import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import { formatearPesos } from "@/lib/format";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { LogoutButton } from "@/components/auth/logout-button";
 
 export const metadata: Metadata = {
   title: "Panel — ObraApp",
 };
 
-// Panel principal (vacío por ahora). El acceso lo protege el middleware
-// (única autoridad de auth), así que acá NO redirigimos: solo leemos la
-// sesión para mostrar el nombre. Esto evita el loop de redirecciones.
+// Consulta la base en cada request: no se prerrenderiza.
+export const dynamic = "force-dynamic";
+
+// Etiqueta y color de cada estado del presupuesto (texto Y fondo explícitos).
+const ESTILOS_ESTADO: Record<string, { etiqueta: string; clase: string }> = {
+  borrador: {
+    etiqueta: "Borrador",
+    clase: "bg-muted text-muted-foreground",
+  },
+  enviado: {
+    etiqueta: "Enviado",
+    clase: "bg-primary/10 text-primary",
+  },
+  firmado: {
+    etiqueta: "Firmado",
+    clase: "bg-green-100 text-green-800",
+  },
+  cancelado: {
+    etiqueta: "Cancelado",
+    clase: "bg-destructive/10 text-destructive",
+  },
+};
+
+const formatoFecha = new Intl.DateTimeFormat("es-AR", {
+  day: "2-digit",
+  month: "2-digit",
+  year: "numeric",
+});
+
+// El acceso lo protege el middleware (única autoridad de auth), así que acá
+// NO redirigimos: solo leemos la sesión para mostrar los datos.
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions);
+  const userId = session?.user?.id;
   const nombre = session?.user?.name ?? session?.user?.email ?? "";
+
+  // Presupuestos recientes del usuario (vacío si no hay ninguno).
+  const presupuestos = userId
+    ? await prisma.presupuesto.findMany({
+        where: { userId },
+        orderBy: { creadoAt: "desc" },
+        take: 10,
+        select: {
+          id: true,
+          numero: true,
+          titulo: true,
+          clienteNombre: true,
+          estado: true,
+          total: true,
+          creadoAt: true,
+        },
+      })
+    : [];
 
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
-      {/* Encabezado del panel */}
+      {/* Encabezado */}
       <header className="border-b border-border">
         <div className="container flex items-center justify-between py-4">
           <span className="text-lg font-bold text-foreground">ObraApp</span>
@@ -28,20 +78,82 @@ export default async function DashboardPage() {
         </div>
       </header>
 
-      {/* Contenido */}
-      <main className="container flex flex-1 flex-col items-center justify-center gap-2 py-12 text-center">
-        <h1 className="text-2xl font-bold text-foreground">
-          Hola{nombre ? `, ${nombre}` : ""} 👋
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Empezá creando tu primer presupuesto.
-        </p>
-        <Button asChild size="lg" className="mt-4 gap-2">
-          <Link href="/dashboard/presupuestos/nuevo">
-            <Plus className="h-4 w-4" />
-            Crear presupuesto
-          </Link>
-        </Button>
+      <main className="container flex flex-col gap-6 py-6">
+        {/* Saludo + acción principal */}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">
+              Hola{nombre ? `, ${nombre}` : ""} 👋
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              Gestioná tus presupuestos desde acá.
+            </p>
+          </div>
+          <Button asChild size="lg" className="gap-2">
+            <Link href="/dashboard/presupuestos/nuevo">
+              <Plus className="h-4 w-4" />
+              Crear presupuesto
+            </Link>
+          </Button>
+        </div>
+
+        {/* Presupuestos recientes */}
+        <section className="flex flex-col gap-3">
+          <h2 className="text-base font-semibold text-foreground">
+            Presupuestos recientes
+          </h2>
+
+          {presupuestos.length === 0 ? (
+            <Card className="bg-card text-card-foreground">
+              <CardContent className="flex flex-col items-center gap-3 py-10 text-center">
+                <FileText className="h-8 w-8 text-muted-foreground" aria-hidden />
+                <p className="text-sm text-muted-foreground">
+                  Todavía no creaste ningún presupuesto.
+                </p>
+                <Button asChild variant="outline" className="gap-2">
+                  <Link href="/dashboard/presupuestos/nuevo">
+                    <Plus className="h-4 w-4" />
+                    Crear el primero
+                  </Link>
+                </Button>
+              </CardContent>
+            </Card>
+          ) : (
+            <ul className="flex flex-col gap-3">
+              {presupuestos.map((p) => {
+                const estado =
+                  ESTILOS_ESTADO[p.estado] ?? ESTILOS_ESTADO.borrador;
+                return (
+                  <li key={p.id}>
+                    <Card className="bg-card text-card-foreground">
+                      <CardContent className="flex items-center justify-between gap-3 py-4">
+                        <div className="flex min-w-0 flex-col">
+                          <span className="truncate text-sm font-medium text-foreground">
+                            #{p.numero} · {p.titulo}
+                          </span>
+                          <span className="truncate text-xs text-muted-foreground">
+                            {p.clienteNombre} ·{" "}
+                            {formatoFecha.format(p.creadoAt)}
+                          </span>
+                        </div>
+                        <div className="flex flex-col items-end gap-1">
+                          <span className="text-sm font-semibold text-foreground">
+                            {formatearPesos(p.total)}
+                          </span>
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-xs font-medium ${estado.clase}`}
+                          >
+                            {estado.etiqueta}
+                          </span>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
       </main>
     </div>
   );

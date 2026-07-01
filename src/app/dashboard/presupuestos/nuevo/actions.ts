@@ -1,28 +1,10 @@
 "use server";
 
 import { getServerSession } from "next-auth";
-import { Categoria } from "@prisma/client";
 
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-
-// Conjunto de rubros válidos para validar la entrada del cliente.
-const RUBROS_VALIDOS = new Set<string>(Object.values(Categoria));
-
-export type ItemInput = {
-  descripcion: string;
-  cantidad: number;
-  precioUnitario: number;
-  categoria: string;
-};
-
-export type CrearPresupuestoInput = {
-  titulo: string;
-  clienteNombre: string;
-  clienteEmail?: string;
-  clienteTel?: string;
-  items: ItemInput[];
-};
+import { crearPresupuestoSchema, type CrearPresupuestoInput } from "@/lib/validations";
 
 export type CrearPresupuestoResultado =
   | { ok: true; id: string; numero: number }
@@ -30,7 +12,7 @@ export type CrearPresupuestoResultado =
 
 // Crea un presupuesto con sus ítems. El número es autoincremental por
 // usuario. El total y los subtotales se recalculan en el servidor: nunca se
-// confía en los valores que manda el cliente.
+// confía en los valores que manda el cliente. La entrada se valida con Zod.
 export async function crearPresupuesto(
   input: CrearPresupuestoInput,
 ): Promise<CrearPresupuestoResultado> {
@@ -40,49 +22,25 @@ export async function crearPresupuesto(
   }
   const userId = session.user.id;
 
-  const titulo = input.titulo?.trim() ?? "";
-  const clienteNombre = input.clienteNombre?.trim() ?? "";
+  // Validación con Zod.
+  const parseo = crearPresupuestoSchema.safeParse(input);
+  if (!parseo.success) {
+    const primerError = parseo.error.issues[0]?.message ?? "Datos inválidos.";
+    return { ok: false, error: primerError };
+  }
+  const datos = parseo.data;
 
-  if (!titulo) {
-    return { ok: false, error: "Ingresá un título para el presupuesto." };
-  }
-  if (!clienteNombre) {
-    return { ok: false, error: "Ingresá el nombre del cliente." };
-  }
-  if (!Array.isArray(input.items) || input.items.length === 0) {
-    return { ok: false, error: "Agregá al menos una tarea al presupuesto." };
-  }
-
-  // Saneamos y validamos cada ítem.
-  const items = input.items.map((item) => ({
-    descripcion: item.descripcion?.trim() ?? "",
-    cantidad: Number(item.cantidad),
-    precioUnitario: Number(item.precioUnitario),
+  // Recalculamos subtotales y total en el servidor.
+  const items = datos.items.map((item) => ({
+    descripcion: item.descripcion,
+    cantidad: item.cantidad,
+    precioUnitario: item.precioUnitario,
+    subtotal: item.cantidad * item.precioUnitario,
     categoria: item.categoria,
   }));
+  const total = items.reduce((acc, item) => acc + item.subtotal, 0);
 
-  for (const item of items) {
-    if (!item.descripcion) {
-      return { ok: false, error: "Hay una tarea sin descripción." };
-    }
-    if (!RUBROS_VALIDOS.has(item.categoria)) {
-      return { ok: false, error: "Una de las tareas tiene un rubro inválido." };
-    }
-    if (!Number.isFinite(item.cantidad) || item.cantidad <= 0) {
-      return { ok: false, error: "Revisá las cantidades: deben ser mayores a 0." };
-    }
-    if (!Number.isFinite(item.precioUnitario) || item.precioUnitario < 0) {
-      return { ok: false, error: "Revisá los precios unitarios." };
-    }
-  }
-
-  const total = items.reduce(
-    (acumulado, item) => acumulado + item.cantidad * item.precioUnitario,
-    0,
-  );
-
-  // Transacción: calculamos el próximo número del usuario y creamos el
-  // presupuesto junto con sus ítems de forma atómica.
+  // Transacción: número autoincremental por usuario + creación atómica.
   const presupuesto = await prisma.$transaction(async (tx) => {
     const ultimo = await tx.presupuesto.findFirst({
       where: { userId },
@@ -94,21 +52,14 @@ export async function crearPresupuesto(
     return tx.presupuesto.create({
       data: {
         numero,
-        titulo,
-        clienteNombre,
-        clienteEmail: input.clienteEmail?.trim() || null,
-        clienteTel: input.clienteTel?.trim() || null,
+        titulo: datos.titulo,
+        clienteNombre: datos.clienteNombre,
+        clienteEmail: datos.clienteEmail || null,
+        clienteTel: datos.clienteTel || null,
+        notas: datos.notas || null,
         total,
         userId,
-        items: {
-          create: items.map((item) => ({
-            descripcion: item.descripcion,
-            cantidad: item.cantidad,
-            precioUnitario: item.precioUnitario,
-            subtotal: item.cantidad * item.precioUnitario,
-            categoria: item.categoria as Categoria,
-          })),
-        },
+        items: { create: items },
       },
       select: { id: true, numero: true },
     });

@@ -2,18 +2,18 @@ import { PrismaAdapter } from "@auth/prisma-adapter";
 import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import GoogleProvider from "next-auth/providers/google";
-import bcrypt from "bcryptjs";
+import bcrypt from "bcrypt";
 
 import { prisma } from "@/lib/prisma";
+import { loginSchema } from "@/lib/validations";
+
+const esProd = process.env.NODE_ENV === "production";
 
 // Configuración central de NextAuth para ObraApp.
-// - Google OAuth para inicio de sesión social.
-// - Credenciales (email + contraseña) para cuentas locales.
-// El secreto y las claves de OAuth se leen exclusivamente de variables de entorno.
-//
-// Nota: al usar el proveedor de credenciales, NextAuth requiere la estrategia
-// de sesión "jwt" (no "database"). El Prisma Adapter sigue persistiendo los
-// usuarios y las cuentas de OAuth.
+// - Google OAuth (con Prisma Adapter para persistir cuentas).
+// - Credenciales (email + contraseña) con bcrypt.
+// - Estrategia JWT (requerida por el proveedor de credenciales).
+// - Cookies HttpOnly, SameSite=Lax y Secure en producción.
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
   secret: process.env.NEXTAUTH_SECRET,
@@ -23,14 +23,25 @@ export const authOptions: NextAuthOptions = {
   pages: {
     signIn: "/login",
   },
+  // Configuración explícita de la cookie de sesión: endurecida.
+  cookies: {
+    sessionToken: {
+      name: esProd
+        ? "__Secure-next-auth.session-token"
+        : "next-auth.session-token",
+      options: {
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        secure: esProd,
+      },
+    },
+  },
   providers: [
-    // Inicio de sesión con Google. Requiere GOOGLE_CLIENT_ID y
-    // GOOGLE_CLIENT_SECRET en las variables de entorno.
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID as string,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
     }),
-    // Inicio de sesión con email y contraseña.
     CredentialsProvider({
       name: "credenciales",
       credentials: {
@@ -38,23 +49,30 @@ export const authOptions: NextAuthOptions = {
         password: { label: "Contraseña", type: "password" },
       },
       async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) {
+        // Validamos el formato con Zod.
+        const parseo = loginSchema.safeParse(credentials);
+        if (!parseo.success) {
           return null;
         }
+        const { email, password } = parseo.data;
 
-        const email = credentials.email.toLowerCase().trim();
         const usuario = await prisma.user.findUnique({ where: { email } });
 
-        // Si el usuario no existe o se registró solo con Google (sin
-        // contraseña local), no se puede autenticar por credenciales.
+        // IMPORTANTE (anti-enumeración): devolvemos null tanto si el usuario
+        // no existe como si la contraseña es incorrecta. NextAuth muestra el
+        // mismo error genérico en ambos casos, así no se puede deducir qué
+        // emails están registrados.
         if (!usuario || !usuario.hashedPassword) {
+          // Comparación "señuelo" para igualar el tiempo de respuesta y no
+          // filtrar por timing si el email existe o no.
+          await bcrypt.compare(
+            password,
+            "$2b$12$0000000000000000000000000000000000000000000000000000a",
+          );
           return null;
         }
 
-        const coincide = await bcrypt.compare(
-          credentials.password,
-          usuario.hashedPassword,
-        );
+        const coincide = await bcrypt.compare(password, usuario.hashedPassword);
         if (!coincide) {
           return null;
         }
@@ -69,14 +87,12 @@ export const authOptions: NextAuthOptions = {
     }),
   ],
   callbacks: {
-    // Guardamos el id del usuario en el token JWT.
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
       }
       return token;
     },
-    // Exponemos el id del usuario en la sesión del lado del cliente.
     async session({ session, token }) {
       if (session.user && token.id) {
         session.user.id = token.id as string;
