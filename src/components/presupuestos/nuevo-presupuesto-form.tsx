@@ -19,6 +19,7 @@ import { Label } from "@/components/ui/label";
 import { CATEGORIAS, etiquetaCategoria } from "@/lib/categorias";
 import { formatearPesos } from "@/lib/format";
 import { crearPresupuesto } from "@/app/dashboard/presupuestos/nuevo/actions";
+import { UpgradeModal } from "@/components/plan/upgrade-modal";
 
 // Tarea del catálogo tal como llega desde el servidor.
 type Tarea = {
@@ -57,6 +58,8 @@ export function NuevoPresupuestoForm({ tareas }: { tareas: Tarea[] }) {
 
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
+  // Modal de upgrade: se abre al alcanzar el límite del plan Free.
+  const [mostrarModalPro, setMostrarModalPro] = useState(false);
 
   // Agrupamos las tareas por rubro (nunca se mezclan entre rubros).
   const tareasPorRubro = useMemo(() => {
@@ -168,7 +171,12 @@ export function NuevoPresupuestoForm({ tareas }: { tareas: Tarea[] }) {
     setGuardando(false);
 
     if (!resultado.ok) {
-      setError(resultado.error);
+      // Si alcanzó el límite del plan Free, mostramos el modal de upgrade.
+      if (resultado.limiteAlcanzado) {
+        setMostrarModalPro(true);
+      } else {
+        setError(resultado.error);
+      }
       return;
     }
 
@@ -435,6 +443,11 @@ export function NuevoPresupuestoForm({ tareas }: { tareas: Tarea[] }) {
           </Button>
         </div>
       </div>
+
+      <UpgradeModal
+        abierto={mostrarModalPro}
+        onCerrar={() => setMostrarModalPro(false)}
+      />
     </div>
   );
 }

@@ -5,10 +5,13 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { crearPresupuestoSchema, type CrearPresupuestoInput } from "@/lib/validations";
+import { verificarLimite } from "@/lib/plan";
+import { auditar } from "@/lib/audit-log";
 
 export type CrearPresupuestoResultado =
   | { ok: true; id: string; numero: number }
-  | { ok: false; error: string };
+  // `limiteAlcanzado` indica que hay que mostrar el modal de upgrade.
+  | { ok: false; error: string; limiteAlcanzado?: boolean };
 
 // Crea un presupuesto con sus ítems. El número es autoincremental por
 // usuario. El total y los subtotales se recalculan en el servidor: nunca se
@@ -29,6 +32,17 @@ export async function crearPresupuesto(
     return { ok: false, error: primerError };
   }
   const datos = parseo.data;
+
+  // Límite de plan: el plan Free permite 3 presupuestos por mes (sin contar el
+  // de ejemplo). Si lo alcanzó, devolvemos el flag para mostrar el modal Pro.
+  const limite = await verificarLimite(userId);
+  if (!limite.permitido) {
+    return {
+      ok: false,
+      error: `Alcanzaste el límite de ${limite.limite} presupuestos de este mes en el plan Free.`,
+      limiteAlcanzado: true,
+    };
+  }
 
   // Recalculamos subtotales y total en el servidor.
   const items = datos.items.map((item) => ({
@@ -72,6 +86,8 @@ export async function crearPresupuesto(
     },
     select: { id: true, numero: true },
   });
+
+  auditar("presupuesto.crear", { presupuestoId: presupuesto.id, userId });
 
   return { ok: true, id: presupuesto.id, numero: presupuesto.numero };
 }

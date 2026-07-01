@@ -7,9 +7,11 @@ import { FileText, Plus } from "lucide-react";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { formatearPesos } from "@/lib/format";
+import { esProActivo } from "@/lib/plan";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { LogoutButton } from "@/components/auth/logout-button";
+import { BotonPro } from "@/components/plan/boton-pro";
 
 export const metadata: Metadata = {
   title: "Panel — ObraApp",
@@ -54,12 +56,14 @@ export default async function DashboardPage() {
   // Redirección por ESTADO de onboarding (no por auth: la auth la maneja el
   // middleware). Si no completó el onboarding, lo mandamos ahí. No hay loop:
   // /onboarding redirige a /dashboard solo cuando SÍ está completo.
+  let esPro = false;
   if (userId) {
     const usuario = await prisma.user.findUnique({
       where: { id: userId },
-      select: { onboardingComplete: true },
+      select: { onboardingComplete: true, plan: true, planExpiresAt: true },
     });
     if (!usuario?.onboardingComplete) redirect("/onboarding");
+    esPro = usuario ? esProActivo(usuario) : false;
   }
 
   // Presupuestos recientes del usuario (vacío si no hay ninguno).
@@ -109,11 +113,34 @@ export default async function DashboardPage() {
           </Button>
         </div>
 
+        {/* Banner de upgrade a Pro (solo plan Free). */}
+        {!esPro && (
+          <Card className="bg-card text-card-foreground">
+            <CardContent className="flex flex-col items-start justify-between gap-3 py-4 sm:flex-row sm:items-center">
+              <div>
+                <p className="text-sm font-medium text-foreground">Plan Free</p>
+                <p className="text-xs text-muted-foreground">
+                  Pasate a Pro para crear presupuestos ilimitados.
+                </p>
+              </div>
+              <BotonPro />
+            </CardContent>
+          </Card>
+        )}
+
         {/* Presupuestos recientes */}
         <section className="flex flex-col gap-3">
-          <h2 className="text-base font-semibold text-foreground">
-            Presupuestos recientes
-          </h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-base font-semibold text-foreground">
+              Presupuestos recientes
+            </h2>
+            <Link
+              href="/dashboard/presupuestos"
+              className="text-sm text-primary hover:underline"
+            >
+              Ver todos
+            </Link>
+          </div>
 
           {presupuestos.length === 0 ? (
             <Card className="bg-card text-card-foreground">
