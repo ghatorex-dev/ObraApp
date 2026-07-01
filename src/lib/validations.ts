@@ -67,8 +67,28 @@ export const crearPresupuestoSchema = z.object({
   ),
   clienteTel: z.string().trim().max(40).optional().or(z.literal("")),
   notas: z.string().trim().max(2000).optional().or(z.literal("")),
+  // Asociación OPCIONAL a un cliente existente. Si viene, el servidor verifica
+  // que pertenezca al usuario y toma sus datos como snapshot.
+  clienteId: z.string().optional(),
+  // Si es true y no hay clienteId, se crea un cliente nuevo con estos datos.
+  guardarComoCliente: z.boolean().optional(),
   items: z
     .array(itemPresupuestoSchema)
     .min(1, "Agregá al menos una tarea al presupuesto."),
 });
 export type CrearPresupuestoInput = z.infer<typeof crearPresupuestoSchema>;
+
+// Alta / edición de un cliente. Solo el nombre es obligatorio.
+export const clienteSchema = z.object({
+  nombre: z.string().trim().min(1, "Ingresá el nombre del cliente.").max(120),
+  telefono: z.string().trim().max(40).optional().or(z.literal("")),
+  // Email opcional: normalizamos vacío/espacios a undefined antes de validar.
+  email: z.preprocess(
+    (valor) =>
+      typeof valor === "string" && valor.trim() === "" ? undefined : valor,
+    z.string().trim().toLowerCase().email("Email inválido.").optional(),
+  ),
+  direccion: z.string().trim().max(200).optional().or(z.literal("")),
+  notas: z.string().trim().max(2000).optional().or(z.literal("")),
+});
+export type ClienteInput = z.infer<typeof clienteSchema>;

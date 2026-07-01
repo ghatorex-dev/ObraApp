@@ -55,17 +55,26 @@ semánticos: `bg-background`, `text-foreground`, `text-muted-foreground`,
 | 8 | **Legales**: `/terminos` y `/privacidad` (públicas, jurisdicción Argentina, Ley 25.326 en privacidad). `LegalShell`/`LegalSeccion` + `Footer` (agregado al dashboard). | `27a2f01` |
 | 9 | **Landing `/`**: hero, rubros (plomería/gas/albañilería/pintura), funcionalidades, precios (Free/Pro), CTA a /registro, footer legal. Corrige copy (decía "electricistas"). + `pdfkit` externo en next.config. | `d44aadf` |
 | — | **Migración** `20260701111640_add_plan_onboarding_ejemplo` (aditiva) aplicada + se trackearon las 3 migraciones base que estaban sin commitear. | `9b9aa93` |
+| **10** | **Fase 2 · Clientes e historial**: modelo `Cliente` (owner + N presupuestos); `Presupuesto.clienteId` opcional (snapshot suelto conservado). `/dashboard/clientes` (listado + buscador por nombre), `/dashboard/clientes/[id]` (detalle + historial de presupuestos), alta/edición (`ClienteForm`, server actions `crearCliente`/`actualizarCliente`). Selector de cliente existente + "Guardar como cliente nuevo" al crear presupuesto (`crearPresupuesto` resuelve/crea cliente). Link "Clientes" en el dashboard. **Migración PENDIENTE de correr por el usuario.** | `(este)` |
 
 ## Modelo de datos (Prisma)
 
 Enum `Categoria` (plomeria, gas, albanileria, pintura). Modelos: `User`,
 `Account`, `Session`, `VerificationToken`, `Presupuesto`, `ItemPresupuesto`,
-`TareaComunitaria` (seed de 20).
+`TareaComunitaria` (seed de 20), **`Cliente`** (Módulo 10).
 
-Campos agregados en la migración: `User.{plan (default "free"), planExpiresAt,
-onboardingComplete (default false), country}` y `Presupuesto.{esEjemplo (default
-false), clienteIp}`. Estados de `Presupuesto`: `borrador | enviado | firmado |
-cancelado`.
+Campos agregados en la migración del Módulo 2: `User.{plan (default "free"),
+planExpiresAt, onboardingComplete (default false), country}` y
+`Presupuesto.{esEjemplo (default false), clienteIp}`. Estados de `Presupuesto`:
+`borrador | enviado | firmado | cancelado`.
+
+**Módulo 10 (schema listo, migración pendiente):**
+- `Cliente { id, nombre, telefono?, email?, direccion?, notas?, creadoAt,
+  actualizadoAt, userId, user, presupuestos[] , @@index([userId]) }`.
+- `User.clientes Cliente[]`.
+- `Presupuesto.clienteId String?` + `cliente Cliente?
+  @relation(onDelete: SetNull)` + `@@index([clienteId])`. Los campos
+  `clienteNombre/clienteEmail/clienteTel` se **mantienen** como snapshot.
 
 ## Decisiones que se tomaron (con motivo)
 
@@ -102,6 +111,17 @@ cancelado`.
    SQL 100% aditivo → no destructivo.
 10. **Verificación por módulo con `npx tsc --noEmit`**; al final build completo +
     smoke test de rutas públicas.
+11. **Clientes (Módulo 10) con compatibilidad hacia atrás**: `Presupuesto.clienteId`
+    es **nullable** → los presupuestos actuales quedan sin cliente asociado y
+    siguen funcionando; no hay backfill. Los campos sueltos `clienteNombre/Email/Tel`
+    se conservan como **snapshot histórico** (si cambia o se borra el cliente, el
+    presupuesto viejo no cambia). `onDelete: SetNull` en `Presupuesto.cliente`:
+    borrar un cliente NO borra sus presupuestos (pierden el link, conservan el
+    snapshot). `telefono` del cliente es **opcional** (consistente con el
+    `clienteTel` opcional del presupuesto). Al crear presupuesto, si viene
+    `clienteId` el servidor verifica pertenencia y toma los datos del cliente como
+    snapshot; si viene `guardarComoCliente` sin id, crea el cliente. La migración
+    es 100% aditiva.
 
 ## Gotchas importantes
 
@@ -120,11 +140,27 @@ cancelado`.
 
 ## Estado actual
 
-- Migración aplicada (BD en sync, `migrate status` = "up to date"), client
-  regenerado.
-- Build completo pasa (16 rutas, sin warnings tras el fix de pdfkit).
-- Dev server local en `http://localhost:3000`. Smoke test OK.
-- Working tree limpio, todo pusheado a `claude/obraapp-init-oms7y9`.
+- **Módulo 10 (Clientes)**: schema actualizado y **client de Prisma regenerado**
+  (offline). `npx tsc --noEmit` y **build completo pasan** (22 rutas). Rutas de
+  `/dashboard/clientes/*` protegidas por el middleware (verificado: 1 redirect a
+  `/login`, sin loop).
+- ⚠️ **Migración `add_cliente` PENDIENTE de correr por el usuario** (ver comando
+  abajo). Hasta que no se corra, `/dashboard/clientes` y el guardado con cliente
+  fallarán en runtime porque la tabla `Cliente` / la columna `clienteId` no
+  existen todavía en la BD.
+- Módulos 1–9: migración previa aplicada, todo pusheado a
+  `claude/obraapp-init-oms7y9`.
+
+### Comando de migración del Módulo 10 (correr en tu máquina)
+
+Detené el dev server primero (gotcha del lock de DLL en Windows), después:
+
+```bash
+npx -p dotenv-cli dotenv -e .env.local -- npx prisma migrate dev --name add_cliente
+```
+
+Es 100% aditiva (CREATE TABLE "Cliente" + ADD COLUMN "clienteId" + índices), no
+destructiva, sin backfill. Reiniciá el dev server al terminar.
 
 ## Pendientes del usuario (no bloquean el funcionamiento)
 

@@ -44,6 +44,41 @@ export async function crearPresupuesto(
     };
   }
 
+  // Resolución del cliente (opcional). El snapshot (clienteNombre/Email/Tel)
+  // se guarda igual, mantenga o no asociación a un Cliente.
+  let clienteId: string | null = null;
+  let snapshotNombre = datos.clienteNombre;
+  let snapshotEmail: string | null = datos.clienteEmail || null;
+  let snapshotTel: string | null = datos.clienteTel || null;
+
+  if (datos.clienteId) {
+    // Cliente existente: verificamos que sea del usuario y tomamos sus datos.
+    const cliente = await prisma.cliente.findFirst({
+      where: { id: datos.clienteId, userId },
+      select: { id: true, nombre: true, email: true, telefono: true },
+    });
+    if (!cliente) {
+      return { ok: false, error: "El cliente seleccionado no existe." };
+    }
+    clienteId = cliente.id;
+    snapshotNombre = cliente.nombre;
+    snapshotEmail = cliente.email;
+    snapshotTel = cliente.telefono;
+  } else if (datos.guardarComoCliente) {
+    // Cliente nuevo creado al momento de armar el presupuesto.
+    const nuevo = await prisma.cliente.create({
+      data: {
+        userId,
+        nombre: snapshotNombre,
+        email: snapshotEmail,
+        telefono: snapshotTel,
+      },
+      select: { id: true },
+    });
+    clienteId = nuevo.id;
+    auditar("cliente.crear", { clienteId: nuevo.id, userId });
+  }
+
   // Recalculamos subtotales y total en el servidor.
   const items = datos.items.map((item) => ({
     descripcion: item.descripcion,
@@ -76,9 +111,10 @@ export async function crearPresupuesto(
     data: {
       numero,
       titulo: datos.titulo,
-      clienteNombre: datos.clienteNombre,
-      clienteEmail: datos.clienteEmail || null,
-      clienteTel: datos.clienteTel || null,
+      clienteNombre: snapshotNombre,
+      clienteEmail: snapshotEmail,
+      clienteTel: snapshotTel,
+      clienteId,
       notas: datos.notas || null,
       total,
       userId,

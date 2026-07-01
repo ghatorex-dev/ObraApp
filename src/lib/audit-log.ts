@@ -9,6 +9,8 @@ export type EventoAuditoria =
   | "onboarding.completar"
   | "presupuesto.crear"
   | "presupuesto.eliminar"
+  | "cliente.crear"
+  | "cliente.actualizar"
   | "presupuesto.enviar"
   | "presupuesto.firmar"
   | "pdf.generar"

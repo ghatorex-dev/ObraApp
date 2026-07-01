@@ -27,25 +27,26 @@ enum Categoria {
 // ----------------------------------------------------------------------------
 
 model User {
-  id             String        @id @default(cuid())
-  name           String?
-  email          String        @unique
-  emailVerified  DateTime?
-  image          String?
+  id                 String        @id @default(cuid())
+  name               String?
+  email              String        @unique
+  emailVerified      DateTime?
+  image              String?
   // Contraseña hasheada con bcrypt. Opcional: los usuarios de Google no tienen.
-  hashedPassword String?
+  hashedPassword     String?
   // Plan comercial: "free" | "pro".
-  plan               String    @default("free")
+  plan               String        @default("free")
   // Vencimiento del plan Pro (null si es Free o sin vencimiento).
   planExpiresAt      DateTime?
   // Onboarding completado (nombre + país).
-  onboardingComplete Boolean   @default(false)
+  onboardingComplete Boolean       @default(false)
   // País del usuario (Argentina por defecto en el onboarding).
   country            String?
-  createdAt      DateTime      @default(now())
-  accounts       Account[]
-  sessions       Session[]
-  presupuestos   Presupuesto[]
+  createdAt          DateTime      @default(now())
+  accounts           Account[]
+  sessions           Session[]
+  presupuestos       Presupuesto[]
+  clientes           Cliente[]
 }
 
 model Account {
@@ -109,6 +110,29 @@ model Presupuesto {
   userId        String
   user          User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   items         ItemPresupuesto[]
+  // Asociación OPCIONAL a un cliente. Los campos clienteNombre/Email/Tel se
+  // mantienen como snapshot histórico aunque el cliente cambie o se elimine.
+  clienteId     String?
+  cliente       Cliente?          @relation(fields: [clienteId], references: [id], onDelete: SetNull)
+
+  @@index([clienteId])
+}
+
+// Cliente del usuario. Un cliente puede tener varios presupuestos.
+model Cliente {
+  id            String        @id @default(cuid())
+  nombre        String
+  telefono      String?
+  email         String?
+  direccion     String?
+  notas         String?
+  creadoAt      DateTime      @default(now())
+  actualizadoAt DateTime      @updatedAt
+  userId        String
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  presupuestos  Presupuesto[]
+
+  @@index([userId])
 }
 
 model ItemPresupuesto {

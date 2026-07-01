@@ -30,6 +30,14 @@ type Tarea = {
   categoria: Categoria;
 };
 
+// Cliente del usuario para el selector opcional del paso 1.
+type ClienteOpcion = {
+  id: string;
+  nombre: string;
+  telefono: string | null;
+  email: string | null;
+};
+
 // Estado editable de una tarea seleccionada. Guardamos strings para que los
 // inputs numéricos se comporten bien mientras el usuario escribe.
 type SeleccionItem = {
@@ -43,7 +51,13 @@ function aNumero(texto: string): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-export function NuevoPresupuestoForm({ tareas }: { tareas: Tarea[] }) {
+export function NuevoPresupuestoForm({
+  tareas,
+  clientes,
+}: {
+  tareas: Tarea[];
+  clientes: ClienteOpcion[];
+}) {
   const router = useRouter();
 
   // Datos del cliente y del presupuesto.
@@ -51,6 +65,25 @@ export function NuevoPresupuestoForm({ tareas }: { tareas: Tarea[] }) {
   const [clienteEmail, setClienteEmail] = useState("");
   const [clienteTel, setClienteTel] = useState("");
   const [titulo, setTitulo] = useState("");
+
+  // Cliente asociado (opcional). "" = cliente nuevo (datos sueltos).
+  const [clienteId, setClienteId] = useState("");
+  // Si es cliente nuevo, permite guardarlo en la agenda de clientes.
+  const [guardarComoCliente, setGuardarComoCliente] = useState(false);
+
+  // Cambia el cliente seleccionado. Si es uno existente, precarga sus datos.
+  function seleccionarCliente(id: string) {
+    setClienteId(id);
+    if (id) {
+      const c = clientes.find((x) => x.id === id);
+      if (c) {
+        setClienteNombre(c.nombre);
+        setClienteEmail(c.email ?? "");
+        setClienteTel(c.telefono ?? "");
+      }
+      setGuardarComoCliente(false);
+    }
+  }
 
   // Rubros elegidos y tareas seleccionadas (por id de tarea).
   const [rubros, setRubros] = useState<Categoria[]>([]);
@@ -166,6 +199,9 @@ export function NuevoPresupuestoForm({ tareas }: { tareas: Tarea[] }) {
       clienteNombre,
       clienteEmail: clienteEmail || undefined,
       clienteTel: clienteTel || undefined,
+      clienteId: clienteId || undefined,
+      // Solo aplica cuando es cliente nuevo (sin clienteId).
+      guardarComoCliente: clienteId ? undefined : guardarComoCliente,
       items,
     });
     setGuardando(false);
@@ -196,6 +232,28 @@ export function NuevoPresupuestoForm({ tareas }: { tareas: Tarea[] }) {
           <CardDescription>¿Para quién es el presupuesto?</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
+          {/* Selector de cliente existente (opcional). Solo si hay clientes. */}
+          {clientes.length > 0 && (
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="clienteExistente" className="text-foreground">
+                Cliente
+              </Label>
+              <select
+                id="clienteExistente"
+                value={clienteId}
+                onChange={(e) => seleccionarCliente(e.target.value)}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              >
+                <option value="">➕ Cliente nuevo</option>
+                {clientes.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.nombre}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           <div className="flex flex-col gap-2">
             <Label htmlFor="clienteNombre" className="text-foreground">
               Nombre <span className="text-destructive">*</span>
@@ -205,6 +263,7 @@ export function NuevoPresupuestoForm({ tareas }: { tareas: Tarea[] }) {
               placeholder="Ej: María González"
               value={clienteNombre}
               onChange={(e) => setClienteNombre(e.target.value)}
+              disabled={Boolean(clienteId)}
             />
           </div>
           <div className="flex flex-col gap-2">
@@ -218,6 +277,7 @@ export function NuevoPresupuestoForm({ tareas }: { tareas: Tarea[] }) {
               placeholder="cliente@ejemplo.com"
               value={clienteEmail}
               onChange={(e) => setClienteEmail(e.target.value)}
+              disabled={Boolean(clienteId)}
             />
           </div>
           <div className="flex flex-col gap-2">
@@ -232,8 +292,22 @@ export function NuevoPresupuestoForm({ tareas }: { tareas: Tarea[] }) {
               placeholder="Ej: 11 2345-6789"
               value={clienteTel}
               onChange={(e) => setClienteTel(e.target.value)}
+              disabled={Boolean(clienteId)}
             />
           </div>
+
+          {/* Guardar como cliente nuevo (solo si NO se eligió uno existente). */}
+          {!clienteId && (
+            <label className="flex cursor-pointer items-center gap-2">
+              <Checkbox
+                checked={guardarComoCliente}
+                onCheckedChange={(v) => setGuardarComoCliente(v === true)}
+              />
+              <span className="text-sm text-foreground">
+                Guardar como cliente nuevo
+              </span>
+            </label>
+          )}
         </CardContent>
       </Card>
 
