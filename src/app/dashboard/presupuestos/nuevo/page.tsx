@@ -1,10 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import { getServerSession } from "next-auth";
 import { ArrowLeft } from "lucide-react";
 
-import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { NuevoPresupuestoForm } from "@/components/presupuestos/nuevo-presupuesto-form";
 
@@ -12,13 +9,12 @@ export const metadata: Metadata = {
   title: "Nuevo presupuesto — ObraApp",
 };
 
-export default async function NuevoPresupuestoPage() {
-  // El middleware ya protege /dashboard/*, pero necesitamos la sesión igual.
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
-    redirect("/login");
-  }
+// Consulta el catálogo en la base en cada request: no se prerrenderiza.
+export const dynamic = "force-dynamic";
 
+// El acceso lo protege el middleware; el server action revalida la sesión
+// al guardar. Acá NO redirigimos para no arriesgar loops de redirección.
+export default async function NuevoPresupuestoPage() {
   // Traemos solo las tareas activas del catálogo comunitario.
   const tareas = await prisma.tareaComunitaria.findMany({
     where: { activa: true },

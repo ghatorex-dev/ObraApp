@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { Plus } from "lucide-react";
 
@@ -12,14 +11,12 @@ export const metadata: Metadata = {
   title: "Panel — ObraApp",
 };
 
-// Panel principal (vacío por ahora). Protegido: requiere sesión.
+// Panel principal (vacío por ahora). El acceso lo protege el middleware
+// (única autoridad de auth), así que acá NO redirigimos: solo leemos la
+// sesión para mostrar el nombre. Esto evita el loop de redirecciones.
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions);
-  if (!session) {
-    redirect("/login");
-  }
-
-  const nombre = session.user?.name ?? session.user?.email ?? "";
+  const nombre = session?.user?.name ?? session?.user?.email ?? "";
 
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">

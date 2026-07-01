@@ -3,6 +3,13 @@ import type { NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
 
 // Middleware de protección de rutas para ObraApp.
+//
+// IMPORTANTE: este middleware es la ÚNICA autoridad de redirección de auth.
+// Las páginas NO deben volver a redirigir según la sesión, porque si un
+// segundo chequeo (getServerSession) discrepa de este (getToken) se produce
+// un loop de redirecciones (/login -> /dashboard -> /login -> ...).
+//
+// Reglas:
 // - /dashboard/* requiere sesión: sin sesión redirige a /login.
 // - /login y /registro con sesión activa redirigen a /dashboard.
 //
@@ -33,6 +40,8 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
+  // En cualquier otro caso (incluye /login y /registro SIN sesión) dejamos
+  // pasar la request sin redirigir. Esto evita el loop.
   return NextResponse.next();
 }
 
