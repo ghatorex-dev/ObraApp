@@ -23,6 +23,11 @@ export const onboardingSchema = z.object({
 });
 export type OnboardingInput = z.infer<typeof onboardingSchema>;
 
+// Actualización del nombre desde Configuración.
+export const actualizarNombreSchema = z.object({
+  nombre: z.string().trim().min(1, "Ingresá tu nombre.").max(120),
+});
+
 // Login por credenciales.
 export const loginSchema = z.object({
   email: z.string().trim().toLowerCase().email(),

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
-import { FileText, Plus } from "lucide-react";
+import { FileText, Plus, Settings } from "lucide-react";
 
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -90,7 +90,15 @@ export default async function DashboardPage() {
       <header className="border-b border-border">
         <div className="container flex items-center justify-between py-4">
           <span className="text-lg font-bold text-foreground">ObraApp</span>
-          <LogoutButton />
+          <div className="flex items-center gap-1">
+            <Button asChild variant="ghost" size="sm" className="gap-1.5">
+              <Link href="/dashboard/configuracion">
+                <Settings className="h-4 w-4" />
+                <span className="sr-only sm:not-sr-only">Configuración</span>
+              </Link>
+            </Button>
+            <LogoutButton />
+          </div>
         </div>
       </header>
 
