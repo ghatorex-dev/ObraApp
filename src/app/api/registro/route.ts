@@ -4,6 +4,7 @@ import bcrypt from "bcrypt";
 import { prisma } from "@/lib/prisma";
 import { registroSchema } from "@/lib/validations";
 import { rateLimit, obtenerIp } from "@/lib/rate-limit";
+import { auditar } from "@/lib/audit-log";
 
 // POST /api/registro — crea una cuenta local con email y contraseña.
 export async function POST(request: Request) {
@@ -11,6 +12,7 @@ export async function POST(request: Request) {
   const ip = obtenerIp(request);
   const limite = await rateLimit(`registro:${ip}`, 5, 600);
   if (!limite.permitido) {
+    auditar("ratelimit.bloqueo", { alcance: "registro", ip });
     return NextResponse.json(
       { error: "Demasiados intentos. Probá de nuevo en unos minutos." },
       { status: 429 },
@@ -46,9 +48,11 @@ export async function POST(request: Request) {
   // Hasheamos la contraseña antes de guardarla (nunca en texto plano).
   const hashedPassword = await bcrypt.hash(password, 12);
 
-  await prisma.user.create({
+  const creado = await prisma.user.create({
     data: { name: nombre, email, hashedPassword },
+    select: { id: true },
   });
+  auditar("registro", { userId: creado.id });
 
   return NextResponse.json({ ok: true }, { status: 201 });
 }

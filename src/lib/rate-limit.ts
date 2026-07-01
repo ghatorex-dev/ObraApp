@@ -9,13 +9,72 @@ export type ResultadoRateLimit = {
   reinicioEn: number;
 };
 
-// Rate limiting con ventana fija sobre Redis.
+// ----------------------------------------------------------------------------
+// Fallback en memoria (Map) cuando NO hay Redis.
+//
+// Si REDIS_URL no está configurada, usamos un contador de ventana fija en
+// memoria del proceso. Así el rate limiting SIGUE funcionando sin Redis y la
+// app no se rompe. Limitación conocida: en entornos serverless cada instancia
+// tiene su propio Map (no se comparte entre lambdas), pero es suficiente como
+// defensa básica y es exactamente el comportamiento buscado ("usar Map").
+// ----------------------------------------------------------------------------
+const globalForMem = globalThis as unknown as {
+  rateLimitMem: Map<string, { cantidad: number; expiraEn: number }> | undefined;
+};
+
+const memStore =
+  globalForMem.rateLimitMem ??
+  new Map<string, { cantidad: number; expiraEn: number }>();
+if (process.env.NODE_ENV !== "production") {
+  globalForMem.rateLimitMem = memStore;
+}
+
+function rateLimitEnMemoria(
+  clave: string,
+  limite: number,
+  ventanaSeg: number,
+): ResultadoRateLimit {
+  const ahora = Date.now();
+  const entrada = memStore.get(clave);
+
+  // Ventana nueva o vencida: reiniciamos el contador.
+  if (!entrada || ahora >= entrada.expiraEn) {
+    memStore.set(clave, { cantidad: 1, expiraEn: ahora + ventanaSeg * 1000 });
+    return { permitido: true, restantes: limite - 1, reinicioEn: ventanaSeg };
+  }
+
+  entrada.cantidad += 1;
+  const reinicioEn = Math.max(0, Math.ceil((entrada.expiraEn - ahora) / 1000));
+  return {
+    permitido: entrada.cantidad <= limite,
+    restantes: Math.max(0, limite - entrada.cantidad),
+    reinicioEn,
+  };
+}
+
+// Limpieza perezosa: cada tanto borramos claves vencidas para que el Map no
+// crezca sin control en procesos de larga vida.
+let ultimaLimpieza = 0;
+function limpiarVencidas() {
+  const ahora = Date.now();
+  if (ahora - ultimaLimpieza < 60_000) return;
+  ultimaLimpieza = ahora;
+  const vencidas: string[] = [];
+  memStore.forEach((valor, clave) => {
+    if (ahora >= valor.expiraEn) vencidas.push(clave);
+  });
+  vencidas.forEach((clave) => memStore.delete(clave));
+}
+
+// ----------------------------------------------------------------------------
+// Rate limiting con ventana fija.
 // - `clave`: identificador único (por ejemplo "registro:<ip>").
 // - `limite`: cantidad máxima de requests permitidas en la ventana.
 // - `ventanaSeg`: duración de la ventana en segundos.
 //
-// Si Redis no está disponible, "falla abierto" (permite la request) para no
-// romper la app; se registra el aviso en consola.
+// Usa Redis si está disponible; si no, cae al Map en memoria. Si Redis existe
+// pero falla, también cae al Map (nunca rompe la app).
+// ----------------------------------------------------------------------------
 export async function rateLimit(
   clave: string,
   limite: number,
@@ -23,7 +82,8 @@ export async function rateLimit(
 ): Promise<ResultadoRateLimit> {
   const redis = getRedis();
   if (!redis) {
-    return { permitido: true, restantes: limite, reinicioEn: ventanaSeg };
+    limpiarVencidas();
+    return rateLimitEnMemoria(clave, limite, ventanaSeg);
   }
 
   const claveRedis = `ratelimit:${clave}`;
@@ -45,8 +105,10 @@ export async function rateLimit(
       reinicioEn,
     };
   } catch (error) {
-    console.error("Rate limit: error de Redis, se permite la request:", error);
-    return { permitido: true, restantes: limite, reinicioEn: ventanaSeg };
+    // Si Redis falla, caemos al Map en memoria en vez de romper.
+    console.error("Rate limit: error de Redis, se usa memoria:", error);
+    limpiarVencidas();
+    return rateLimitEnMemoria(clave, limite, ventanaSeg);
   }
 }
 

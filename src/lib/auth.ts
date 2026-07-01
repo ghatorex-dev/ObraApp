@@ -6,6 +6,7 @@ import bcrypt from "bcrypt";
 
 import { prisma } from "@/lib/prisma";
 import { loginSchema } from "@/lib/validations";
+import { auditar } from "@/lib/audit-log";
 
 const esProd = process.env.NODE_ENV === "production";
 
@@ -22,6 +23,15 @@ export const authOptions: NextAuthOptions = {
   },
   pages: {
     signIn: "/login",
+  },
+  // Auditoría de eventos críticos de autenticación.
+  events: {
+    async signIn({ user }) {
+      auditar("login", { userId: user.id });
+    },
+    async signOut({ token }) {
+      auditar("logout", { userId: (token?.id as string | undefined) ?? null });
+    },
   },
   // Configuración explícita de la cookie de sesión: endurecida.
   cookies: {
