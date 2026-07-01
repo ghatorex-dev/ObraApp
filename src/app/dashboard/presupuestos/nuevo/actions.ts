@@ -40,29 +40,37 @@ export async function crearPresupuesto(
   }));
   const total = items.reduce((acc, item) => acc + item.subtotal, 0);
 
-  // Transacción: número autoincremental por usuario + creación atómica.
-  const presupuesto = await prisma.$transaction(async (tx) => {
-    const ultimo = await tx.presupuesto.findFirst({
-      where: { userId },
-      orderBy: { numero: "desc" },
-      select: { numero: true },
-    });
-    const numero = (ultimo?.numero ?? 0) + 1;
+  // Número autoincremental por usuario.
+  //
+  // NOTA: no usamos prisma.$transaction interactivo porque no es compatible
+  // con el connection pooler de Supabase (pgbouncer, puerto 6543): las
+  // transacciones interactivas mantienen una conexión a lo largo de varios
+  // awaits y el pooler no lo garantiza ("Unable to start a transaction in
+  // the given time"). Hacemos las operaciones de forma secuencial.
+  //
+  // El create con items anidados sí corre como una ÚNICA escritura (Prisma
+  // la ejecuta en una transacción implícita de una sola operación), lo cual
+  // es compatible con el pooler.
+  const ultimo = await prisma.presupuesto.findFirst({
+    where: { userId },
+    orderBy: { numero: "desc" },
+    select: { numero: true },
+  });
+  const numero = (ultimo?.numero ?? 0) + 1;
 
-    return tx.presupuesto.create({
-      data: {
-        numero,
-        titulo: datos.titulo,
-        clienteNombre: datos.clienteNombre,
-        clienteEmail: datos.clienteEmail || null,
-        clienteTel: datos.clienteTel || null,
-        notas: datos.notas || null,
-        total,
-        userId,
-        items: { create: items },
-      },
-      select: { id: true, numero: true },
-    });
+  const presupuesto = await prisma.presupuesto.create({
+    data: {
+      numero,
+      titulo: datos.titulo,
+      clienteNombre: datos.clienteNombre,
+      clienteEmail: datos.clienteEmail || null,
+      clienteTel: datos.clienteTel || null,
+      notas: datos.notas || null,
+      total,
+      userId,
+      items: { create: items },
+    },
+    select: { id: true, numero: true },
   });
 
   return { ok: true, id: presupuesto.id, numero: presupuesto.numero };
