@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { LogoutButton } from "@/components/auth/logout-button";
 import { BotonPro } from "@/components/plan/boton-pro";
+import { Footer } from "@/components/legal/footer";
 
 export const metadata: Metadata = {
   title: "Panel — ObraApp",
@@ -202,6 +203,8 @@ export default async function DashboardPage() {
           )}
         </section>
       </main>
+
+      <Footer />
     </div>
   );
 }
