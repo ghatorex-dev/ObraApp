@@ -16,6 +16,7 @@ export type EventoAuditoria =
   | "material.eliminar"
   | "material.ajustar"
   | "material.deduccion_automatica"
+  | "tarea.crear_propia"
   | "turno.crear"
   | "turno.actualizar"
   | "turno.estado"

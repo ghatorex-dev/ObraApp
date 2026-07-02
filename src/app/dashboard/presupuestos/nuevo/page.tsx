@@ -20,9 +20,13 @@ export default async function NuevoPresupuestoPage() {
   const session = await getServerSession(authOptions);
   const userId = session?.user?.id;
 
-  // Traemos solo las tareas activas del catálogo comunitario.
+  // Traemos las tareas activas: las comunitarias (userId null) + las propias
+  // del usuario actual. Nadie ve las tareas propias de otro usuario.
   const tareas = await prisma.tareaComunitaria.findMany({
-    where: { activa: true },
+    where: {
+      activa: true,
+      OR: [{ userId: null }, ...(userId ? [{ userId }] : [])],
+    },
     orderBy: [{ categoria: "asc" }, { descripcion: "asc" }],
     select: {
       id: true,

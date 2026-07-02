@@ -170,3 +170,24 @@ export const estadoTurnoSchema = z.enum([
   "completado",
   "cancelado",
 ]);
+
+// Tarea propia del usuario (se guarda como TareaComunitaria con userId).
+export const tareaPropiaSchema = z.object({
+  descripcion: z
+    .string()
+    .trim()
+    .min(1, "Ingresá la descripción de la tarea.")
+    .max(200),
+  unidad: z
+    .string()
+    .trim()
+    .min(1, "Ingresá la unidad (ej: hora, m2, unidad).")
+    .max(30),
+  categoria: rubroSchema,
+  // Precio de referencia opcional. Vacío/ausente = sin referencia.
+  precioRef: z.coerce
+    .number()
+    .min(0, "El precio no puede ser negativo.")
+    .optional(),
+});
+export type TareaPropiaInput = z.infer<typeof tareaPropiaSchema>;

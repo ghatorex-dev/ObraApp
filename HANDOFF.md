@@ -58,7 +58,8 @@ semánticos: `bg-background`, `text-foreground`, `text-muted-foreground`,
 | **10** | **Fase 2 · Clientes e historial**: modelo `Cliente` (owner + N presupuestos); `Presupuesto.clienteId` opcional (snapshot suelto conservado). `/dashboard/clientes` (listado + buscador por nombre), `/dashboard/clientes/[id]` (detalle + historial de presupuestos), alta/edición (`ClienteForm`, server actions `crearCliente`/`actualizarCliente`). Selector de cliente existente + "Guardar como cliente nuevo" al crear presupuesto (`crearPresupuesto` resuelve/crea cliente). Link "Clientes" en el dashboard. **Migración PENDIENTE de correr por el usuario.** | `03cd7af` |
 | **11** | **Fase 2 · Inventario**: modelo `Material` (nombre, categoria [enum], unidad string, stockActual/stockMinimo Float, owner, `@@index([userId, categoria])`). `/dashboard/inventario` (agrupado por rubro, filtro por chips `?categoria=`, badge rojo "Stock bajo" cuando `stockActual <= stockMinimo`, ajuste rápido −/+ con cantidad editable), alta/edición/baja (`MaterialForm`, baja con confirmación de dos toques). Server actions `crearMaterial`/`actualizarMaterial`/`eliminarMaterial`/`ajustarStock` (Zod + pertenencia + auditoría; ajuste con piso en 0). Aviso de stock bajo en el dashboard (count con referencia de campo `prisma.material.fields.stockMinimo`) + link "Inventario" en el header. **SIN deducción automática de stock por presupuestos** (iteración futura). Migración `add_material` corrida y versionada por el usuario. | `6ce47f2` |
 | **12** | **Fase 2 · Agenda/Turnos** (cierra Fase 2): modelo `Turno` (fecha/fechaFin?, titulo, estado String pendiente/confirmado/completado/cancelado, snapshot cliente nombre/email/tel, relaciones OPCIONALES a Cliente y Presupuesto con SetNull, `@@index([userId, fecha])`). `/dashboard/agenda` con **toggle lista/calendario**: lista de próximos turnos (badge por estado, cliente, link al presupuesto) y **calendario mensual propio** (grid de días lunes-domingo, punto en días con turnos, click en día lista sus turnos, navegación de mes) — sin librerías nuevas. Alta/edición en `/nuevo` y `/[id]/editar` (`TurnoForm` con selector de cliente y de presupuesto que precargan el snapshot, editable). "Agendar turno" desde el detalle del presupuesto (`?presupuestoId=` precarga todo). Cambio rápido de estado (`TurnoEstado`) con transiciones válidas (pendiente→confirmado→completado; cancelado desde pendiente/confirmado; finales inmutables). Server actions `crearTurno`/`actualizarTurno`/`cambiarEstadoTurno` (Zod + pertenencia + auditoría `turno.*`). **SIN notificaciones/recordatorios** (iteración futura). Migración `add_turno` corrida y versionada por el usuario. | `24f33b2` |
-| **13** | **Fase 3 · Deducción automática de stock al firmar**: `ItemPresupuesto` +`materialId?` (SetNull) +`cantidadUsada?` (`@@index([materialId])`), `Material.itemsUsados`. Selector OPCIONAL de material + cantidad usada por tarea en el form de crear presupuesto (`crearPresupuesto` valida que el material sea del usuario). En `firmarPresupuesto`, al ganar la transición **enviado→firmado** (CAS atómico `updateMany where estado='enviado'`, count===1), descuenta `stockActual -= cantidadUsada` por cada ítem con material — **idempotente** (la transición ocurre una única vez, sin columna marcador). Stock insuficiente: baja hasta 0 (nunca negativo) + audit `material.deduccion_automatica {solicitado, descontado, deficit}` + queda con badge "Stock bajo" en inventario. Nunca bloquea la firma. Deducción secuencial (sin `$transaction`). Detalle del presupuesto muestra "Usa X <unidad> de <material>". **Migración PENDIENTE de correr por el usuario.** | `(este)` |
+| **13** | **Fase 3 · Deducción automática de stock al firmar**: `ItemPresupuesto` +`materialId?` (SetNull) +`cantidadUsada?` (`@@index([materialId])`), `Material.itemsUsados`. Selector OPCIONAL de material + cantidad usada por tarea en el form de crear presupuesto (`crearPresupuesto` valida que el material sea del usuario). En `firmarPresupuesto`, al ganar la transición **enviado→firmado** (CAS atómico `updateMany where estado='enviado'`, count===1), descuenta `stockActual -= cantidadUsada` por cada ítem con material — **idempotente** (la transición ocurre una única vez, sin columna marcador). Stock insuficiente: baja hasta 0 (nunca negativo) + audit `material.deduccion_automatica {solicitado, descontado, deficit}` + queda con badge "Stock bajo" en inventario. Nunca bloquea la firma. Deducción secuencial (sin `$transaction`). Detalle del presupuesto muestra "Usa X <unidad> de <material>". Migración `add_item_material` corrida y versionada por el usuario. | `dc97048` |
+| **14** | **Fase 3 · Tareas propias del usuario**: `TareaComunitaria` +`userId String?` (SetNull→Cascade con User) +`@@index([userId])`, `User.tareas`. `userId null` = comunitaria/global (las 20 del seed, para todos); con valor = tarea **propia**, visible solo para su dueño. El selector de `/dashboard/presupuestos/nuevo` filtra `where { activa, OR: [{userId:null},{userId:actual}] }`. Botón **"Agregar tarea nueva"** por rubro dentro del form (`AgregarTareaPropia`): mini-form (descripción + unidad + precio ref. opcional) → server action `crearTareaPropia` (Zod + `userId` + audit `tarea.crear_propia`) → la tarea queda **persistida (reutilizable)** y aparece al instante **auto-tildada** (estado `tareasExtra` + lista mergeada). Compatible con Módulo 13: una tarea propia se asocia igual a un `Material` (el ítem guarda snapshot, no FK a la tarea). **Migración PENDIENTE de correr por el usuario.** | `(este)` |
 
 ## Modelo de datos (Prisma)
 
@@ -78,6 +79,13 @@ planExpiresAt, onboardingComplete (default false), country}` y
 - `Presupuesto.clienteId String?` + `cliente Cliente?
   @relation(onDelete: SetNull)` + `@@index([clienteId])`. Los campos
   `clienteNombre/clienteEmail/clienteTel` se **mantienen** como snapshot.
+
+**Módulo 14 (schema listo, migración pendiente):**
+- `TareaComunitaria` +`userId String?` +`user User? @relation(onDelete:
+  Cascade)` +`@@index([userId])`. `User.tareas TareaComunitaria[]`. `userId
+  null` = comunitaria/global; con valor = propia del usuario. Los ítems del
+  presupuesto guardan snapshot (no FK a la tarea) → tareas propias fluyen
+  idéntico a las comunitarias, sin tocar `crearPresupuesto` ni la deducción.
 
 **Módulo 13 (schema listo, migración pendiente):**
 - `ItemPresupuesto` +`materialId String?` +`material Material? @relation(SetNull)`
@@ -194,30 +202,31 @@ planExpiresAt, onboardingComplete (default false), country}` y
 
 ## Estado actual
 
-- **Módulo 13 (deducción de stock al firmar)**: schema actualizado y **client
-  de Prisma regenerado** (offline). `npx tsc --noEmit` y **build completo pasan**
+- **Módulo 14 (tareas propias del usuario)**: schema actualizado y **client de
+  Prisma regenerado** (offline). `npx tsc --noEmit` y **build completo pasan**
   (28 rutas).
-- **Migraciones 10, 11 y 12 corridas y versionadas**: `add_cliente`,
-  `add_material` y `20260702043307_add_turno` están en `prisma/migrations/` y
-  aplicadas → las tablas `Cliente`, `Material` y `Turno` existen. (Fase 2
-  completa y migrada.)
-- ⚠️ **Migración del Módulo 13 PENDIENTE de correr por el usuario** (ver comando
-  abajo). Es aditiva sobre `ItemPresupuesto` (+`materialId`, +`cantidadUsada`,
-  +FK, +índice). Hasta correrla, crear presupuesto con material y la firma con
-  deducción fallarán en runtime (columnas inexistentes).
+- **Migraciones 10–13 corridas y versionadas**: `add_cliente`, `add_material`,
+  `add_turno` y `add_item_material` están en `prisma/migrations/` y aplicadas →
+  las tablas/columnas de Clientes, Inventario, Agenda y la deducción de stock
+  existen.
+- ⚠️ **Migración del Módulo 14 PENDIENTE de correr por el usuario** (ver comando
+  abajo). Es aditiva sobre `TareaComunitaria` (+`userId` nullable, +FK a User,
+  +índice). Hasta correrla, `/dashboard/presupuestos/nuevo` fallará en runtime
+  (la columna `userId` no existe). Las 20 filas del seed quedan con `userId`
+  null → siguen comunitarias.
 - Módulos 1–9: migración previa aplicada, todo pusheado a
   `claude/obraapp-init-oms7y9`.
 
-### Comando de migración del Módulo 13 (correr en tu máquina)
+### Comando de migración del Módulo 14 (correr en tu máquina)
 
 Detené el dev server primero (gotcha del lock de DLL en Windows), después:
 
 ```bash
-npx -p dotenv-cli dotenv -e .env.local -- npx prisma migrate dev --name add_item_material
+npx -p dotenv-cli dotenv -e .env.local -- npx prisma migrate dev --name add_tarea_propia
 ```
 
-Es 100% aditiva (ALTER TABLE "ItemPresupuesto" ADD "materialId"/"cantidadUsada"
-+ FK a "Material" + índice), no
+Es 100% aditiva (ALTER TABLE "TareaComunitaria" ADD "userId" + FK a "User" +
+índice), no
 destructiva, sin backfill. Al terminar, reiniciá el dev server y **commiteá la
 carpeta de migración** que se genera en `prisma/migrations/`.
 

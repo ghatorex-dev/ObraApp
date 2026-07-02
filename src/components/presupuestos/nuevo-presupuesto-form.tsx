@@ -20,6 +20,7 @@ import { CATEGORIAS, etiquetaCategoria } from "@/lib/categorias";
 import { formatearPesos } from "@/lib/format";
 import { crearPresupuesto } from "@/app/dashboard/presupuestos/nuevo/actions";
 import { UpgradeModal } from "@/components/plan/upgrade-modal";
+import { AgregarTareaPropia } from "@/components/presupuestos/agregar-tarea-propia";
 
 // Tarea del catálogo tal como llega desde el servidor.
 type Tarea = {
@@ -107,14 +108,25 @@ export function NuevoPresupuestoForm({
   // Modal de upgrade: se abre al alcanzar el límite del plan Free.
   const [mostrarModalPro, setMostrarModalPro] = useState(false);
 
+  // Tareas propias creadas durante esta sesión (se agregan al vuelo al form
+  // y ya quedan persistidas para la próxima vez).
+  const [tareasExtra, setTareasExtra] = useState<Tarea[]>([]);
+
+  // Todas las tareas disponibles: las precargadas (comunitarias + propias que
+  // ya existían) más las que el usuario cree ahora.
+  const todasLasTareas = useMemo(
+    () => [...tareas, ...tareasExtra],
+    [tareas, tareasExtra],
+  );
+
   // Agrupamos las tareas por rubro (nunca se mezclan entre rubros).
   const tareasPorRubro = useMemo(() => {
     const mapa: Record<string, Tarea[]> = {};
-    for (const tarea of tareas) {
+    for (const tarea of todasLasTareas) {
       (mapa[tarea.categoria] ??= []).push(tarea);
     }
     return mapa;
-  }, [tareas]);
+  }, [todasLasTareas]);
 
   // Total calculado automáticamente a partir de las tareas seleccionadas.
   const total = useMemo(() => {
@@ -194,7 +206,7 @@ export function NuevoPresupuestoForm({
 
     // Armamos los ítems a partir de la selección.
     const items = Object.entries(seleccion).map(([tareaId, valores]) => {
-      const tarea = tareas.find((t) => t.id === tareaId)!;
+      const tarea = todasLasTareas.find((t) => t.id === tareaId)!;
       // El material va solo si se eligió uno y se cargó cantidad usada.
       const usaMaterial =
         valores.materialId !== "" && aNumero(valores.cantidadUsada) > 0;
@@ -558,6 +570,25 @@ export function NuevoPresupuestoForm({
                   </div>
                 );
               })}
+
+              {/* Agregar una tarea propia a este rubro, sin salir del form.
+                  Queda persistida (reutilizable) y auto-seleccionada. */}
+              <AgregarTareaPropia
+                categoria={categoria.valor}
+                onCreada={(nueva) => {
+                  setTareasExtra((previa) => [...previa, nueva]);
+                  setSeleccion((previa) => ({
+                    ...previa,
+                    [nueva.id]: {
+                      cantidad: "1",
+                      precioUnitario:
+                        nueva.precioRef != null ? String(nueva.precioRef) : "",
+                      materialId: "",
+                      cantidadUsada: "",
+                    },
+                  }));
+                }}
+              />
             </CardContent>
           </Card>
         );
