@@ -148,6 +148,14 @@ model ItemPresupuesto {
   categoria      Categoria
   presupuestoId  String
   presupuesto    Presupuesto @relation(fields: [presupuestoId], references: [id], onDelete: Cascade)
+  // Asociación OPCIONAL a un material del inventario, para descontar stock
+  // automáticamente al firmar el presupuesto. Ambos nullable: sin material el
+  // ítem funciona exactamente igual que antes.
+  materialId     String?
+  material       Material?   @relation(fields: [materialId], references: [id], onDelete: SetNull)
+  cantidadUsada  Float?
+
+  @@index([materialId])
 }
 
 // ----------------------------------------------------------------------------
@@ -187,20 +195,23 @@ model Turno {
 // Inventario de materiales
 // ----------------------------------------------------------------------------
 
-// Material del inventario del usuario. Gestión MANUAL de stock: sin deducción
-// automática al crear/enviar/firmar presupuestos (iteración futura).
+// Material del inventario del usuario. El stock se ajusta manualmente y,
+// además, se descuenta automáticamente al FIRMAR un presupuesto que tenga
+// ítems con este material asociado (ver firmarPresupuesto).
 model Material {
-  id            String    @id @default(cuid())
+  id            String            @id @default(cuid())
   nombre        String
   categoria     Categoria
   // Unidad de medida: unidad, metro, litro, kg, etc.
   unidad        String
-  stockActual   Float     @default(0)
-  stockMinimo   Float     @default(0)
-  creadoAt      DateTime  @default(now())
-  actualizadoAt DateTime  @updatedAt
+  stockActual   Float             @default(0)
+  stockMinimo   Float             @default(0)
+  creadoAt      DateTime          @default(now())
+  actualizadoAt DateTime          @updatedAt
   userId        String
-  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user          User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Ítems de presupuesto que consumen este material (deducción automática).
+  itemsUsados   ItemPresupuesto[]
 
   @@index([userId, categoria])
 }

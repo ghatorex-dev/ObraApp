@@ -57,7 +57,8 @@ semánticos: `bg-background`, `text-foreground`, `text-muted-foreground`,
 | — | **Migración** `20260701111640_add_plan_onboarding_ejemplo` (aditiva) aplicada + se trackearon las 3 migraciones base que estaban sin commitear. | `9b9aa93` |
 | **10** | **Fase 2 · Clientes e historial**: modelo `Cliente` (owner + N presupuestos); `Presupuesto.clienteId` opcional (snapshot suelto conservado). `/dashboard/clientes` (listado + buscador por nombre), `/dashboard/clientes/[id]` (detalle + historial de presupuestos), alta/edición (`ClienteForm`, server actions `crearCliente`/`actualizarCliente`). Selector de cliente existente + "Guardar como cliente nuevo" al crear presupuesto (`crearPresupuesto` resuelve/crea cliente). Link "Clientes" en el dashboard. **Migración PENDIENTE de correr por el usuario.** | `03cd7af` |
 | **11** | **Fase 2 · Inventario**: modelo `Material` (nombre, categoria [enum], unidad string, stockActual/stockMinimo Float, owner, `@@index([userId, categoria])`). `/dashboard/inventario` (agrupado por rubro, filtro por chips `?categoria=`, badge rojo "Stock bajo" cuando `stockActual <= stockMinimo`, ajuste rápido −/+ con cantidad editable), alta/edición/baja (`MaterialForm`, baja con confirmación de dos toques). Server actions `crearMaterial`/`actualizarMaterial`/`eliminarMaterial`/`ajustarStock` (Zod + pertenencia + auditoría; ajuste con piso en 0). Aviso de stock bajo en el dashboard (count con referencia de campo `prisma.material.fields.stockMinimo`) + link "Inventario" en el header. **SIN deducción automática de stock por presupuestos** (iteración futura). Migración `add_material` corrida y versionada por el usuario. | `6ce47f2` |
-| **12** | **Fase 2 · Agenda/Turnos** (cierra Fase 2): modelo `Turno` (fecha/fechaFin?, titulo, estado String pendiente/confirmado/completado/cancelado, snapshot cliente nombre/email/tel, relaciones OPCIONALES a Cliente y Presupuesto con SetNull, `@@index([userId, fecha])`). `/dashboard/agenda` con **toggle lista/calendario**: lista de próximos turnos (badge por estado, cliente, link al presupuesto) y **calendario mensual propio** (grid de días lunes-domingo, punto en días con turnos, click en día lista sus turnos, navegación de mes) — sin librerías nuevas. Alta/edición en `/nuevo` y `/[id]/editar` (`TurnoForm` con selector de cliente y de presupuesto que precargan el snapshot, editable). "Agendar turno" desde el detalle del presupuesto (`?presupuestoId=` precarga todo). Cambio rápido de estado (`TurnoEstado`) con transiciones válidas (pendiente→confirmado→completado; cancelado desde pendiente/confirmado; finales inmutables). Server actions `crearTurno`/`actualizarTurno`/`cambiarEstadoTurno` (Zod + pertenencia + auditoría `turno.*`). **SIN notificaciones/recordatorios** (iteración futura). **Migración PENDIENTE de correr por el usuario.** | `(este)` |
+| **12** | **Fase 2 · Agenda/Turnos** (cierra Fase 2): modelo `Turno` (fecha/fechaFin?, titulo, estado String pendiente/confirmado/completado/cancelado, snapshot cliente nombre/email/tel, relaciones OPCIONALES a Cliente y Presupuesto con SetNull, `@@index([userId, fecha])`). `/dashboard/agenda` con **toggle lista/calendario**: lista de próximos turnos (badge por estado, cliente, link al presupuesto) y **calendario mensual propio** (grid de días lunes-domingo, punto en días con turnos, click en día lista sus turnos, navegación de mes) — sin librerías nuevas. Alta/edición en `/nuevo` y `/[id]/editar` (`TurnoForm` con selector de cliente y de presupuesto que precargan el snapshot, editable). "Agendar turno" desde el detalle del presupuesto (`?presupuestoId=` precarga todo). Cambio rápido de estado (`TurnoEstado`) con transiciones válidas (pendiente→confirmado→completado; cancelado desde pendiente/confirmado; finales inmutables). Server actions `crearTurno`/`actualizarTurno`/`cambiarEstadoTurno` (Zod + pertenencia + auditoría `turno.*`). **SIN notificaciones/recordatorios** (iteración futura). Migración `add_turno` corrida y versionada por el usuario. | `24f33b2` |
+| **13** | **Fase 3 · Deducción automática de stock al firmar**: `ItemPresupuesto` +`materialId?` (SetNull) +`cantidadUsada?` (`@@index([materialId])`), `Material.itemsUsados`. Selector OPCIONAL de material + cantidad usada por tarea en el form de crear presupuesto (`crearPresupuesto` valida que el material sea del usuario). En `firmarPresupuesto`, al ganar la transición **enviado→firmado** (CAS atómico `updateMany where estado='enviado'`, count===1), descuenta `stockActual -= cantidadUsada` por cada ítem con material — **idempotente** (la transición ocurre una única vez, sin columna marcador). Stock insuficiente: baja hasta 0 (nunca negativo) + audit `material.deduccion_automatica {solicitado, descontado, deficit}` + queda con badge "Stock bajo" en inventario. Nunca bloquea la firma. Deducción secuencial (sin `$transaction`). Detalle del presupuesto muestra "Usa X <unidad> de <material>". **Migración PENDIENTE de correr por el usuario.** | `(este)` |
 
 ## Modelo de datos (Prisma)
 
@@ -77,6 +78,11 @@ planExpiresAt, onboardingComplete (default false), country}` y
 - `Presupuesto.clienteId String?` + `cliente Cliente?
   @relation(onDelete: SetNull)` + `@@index([clienteId])`. Los campos
   `clienteNombre/clienteEmail/clienteTel` se **mantienen** como snapshot.
+
+**Módulo 13 (schema listo, migración pendiente):**
+- `ItemPresupuesto` +`materialId String?` +`material Material? @relation(SetNull)`
+  +`cantidadUsada Float?` +`@@index([materialId])`. `Material.itemsUsados
+  ItemPresupuesto[]`. 100% opcional: sin material, el ítem funciona igual.
 
 **Módulo 12 (schema listo, migración pendiente):**
 - `Turno { id, titulo, estado String @default("pendiente"), fecha DateTime,
@@ -158,6 +164,18 @@ planExpiresAt, onboardingComplete (default false), country}` y
     propio (semana lunes-domingo) sin dependencias nuevas. La "cancelación" de
     un turno es un cambio de estado (no hay borrado de turnos). Los estados
     finales (completado/cancelado) no tienen más transiciones.
+14. **Deducción de stock (Módulo 13) idempotente por transición, sin marcador**:
+    la deducción se dispara SOLO cuando `firmarPresupuesto` gana la transición
+    `enviado→firmado` vía un CAS atómico (`updateMany where estado='enviado'` →
+    `count===1`). Como esa transición ocurre exactamente una vez (y el UPDATE
+    condicional es atómico, seguro contra dos firmas concurrentes), la deducción
+    corre una única vez sin necesidad de una columna `deducidoAt`. Relación
+    ItemPresupuesto↔Material por **campos directos** (un material por ítem), no
+    tabla intermedia — YAGNI; si a futuro se necesitan varios materiales por
+    ítem, ahí sí conviene `ItemPresupuestoMaterial`. Déficit: se descuenta hasta
+    0 (patrón de `ajustarStock`), se audita `material.deduccion_automatica` con
+    `{solicitado, descontado, deficit}` y el material queda con el badge "Stock
+    bajo" existente. La deducción va en try/catch: nunca rompe la firma.
 
 ## Gotchas importantes
 
@@ -176,29 +194,30 @@ planExpiresAt, onboardingComplete (default false), country}` y
 
 ## Estado actual
 
-- **Fase 2 completa en código**: Módulos 10 (Clientes), 11 (Inventario) y
-  12 (Agenda). `npx tsc --noEmit` y **build completo pasan** (28 rutas). Rutas
-  de `/dashboard/{clientes,inventario,agenda}/*` protegidas por el middleware
-  (verificado: 1 redirect a `/login`, sin loop).
-- **Migraciones 10 y 11 corridas y versionadas** (se versionaron tarde, después
-  del código): `20260701233447_add_cliente` y `20260702002812_add_material`
-  están en `prisma/migrations/` y aplicadas a la BD → las tablas `Cliente` y
-  `Material` existen.
-- ⚠️ **Migración del Módulo 12 (Turno) PENDIENTE de correr por el usuario**
-  (ver comando abajo). Hasta correrla, `/dashboard/agenda` fallará en runtime
-  porque la tabla `Turno` no existe todavía en la BD.
+- **Módulo 13 (deducción de stock al firmar)**: schema actualizado y **client
+  de Prisma regenerado** (offline). `npx tsc --noEmit` y **build completo pasan**
+  (28 rutas).
+- **Migraciones 10, 11 y 12 corridas y versionadas**: `add_cliente`,
+  `add_material` y `20260702043307_add_turno` están en `prisma/migrations/` y
+  aplicadas → las tablas `Cliente`, `Material` y `Turno` existen. (Fase 2
+  completa y migrada.)
+- ⚠️ **Migración del Módulo 13 PENDIENTE de correr por el usuario** (ver comando
+  abajo). Es aditiva sobre `ItemPresupuesto` (+`materialId`, +`cantidadUsada`,
+  +FK, +índice). Hasta correrla, crear presupuesto con material y la firma con
+  deducción fallarán en runtime (columnas inexistentes).
 - Módulos 1–9: migración previa aplicada, todo pusheado a
   `claude/obraapp-init-oms7y9`.
 
-### Comando de migración del Módulo 12 (correr en tu máquina)
+### Comando de migración del Módulo 13 (correr en tu máquina)
 
 Detené el dev server primero (gotcha del lock de DLL en Windows), después:
 
 ```bash
-npx -p dotenv-cli dotenv -e .env.local -- npx prisma migrate dev --name add_turno
+npx -p dotenv-cli dotenv -e .env.local -- npx prisma migrate dev --name add_item_material
 ```
 
-Es 100% aditiva (CREATE TABLE "Turno" + FKs + índice [userId, fecha]), no
+Es 100% aditiva (ALTER TABLE "ItemPresupuesto" ADD "materialId"/"cantidadUsada"
++ FK a "Material" + índice), no
 destructiva, sin backfill. Al terminar, reiniciá el dev server y **commiteá la
 carpeta de migración** que se genera en `prisma/migrations/`.
 

@@ -38,11 +38,22 @@ type ClienteOpcion = {
   email: string | null;
 };
 
+// Material del inventario para el selector opcional por tarea.
+type MaterialOpcion = {
+  id: string;
+  nombre: string;
+  unidad: string;
+  stockActual: number;
+};
+
 // Estado editable de una tarea seleccionada. Guardamos strings para que los
 // inputs numéricos se comporten bien mientras el usuario escribe.
 type SeleccionItem = {
   cantidad: string;
   precioUnitario: string;
+  // Material del inventario asociado (opcional) y cuánto se usa.
+  materialId: string;
+  cantidadUsada: string;
 };
 
 // Convierte un texto a número, devolviendo 0 si no es válido.
@@ -54,9 +65,11 @@ function aNumero(texto: string): number {
 export function NuevoPresupuestoForm({
   tareas,
   clientes,
+  materiales,
 }: {
   tareas: Tarea[];
   clientes: ClienteOpcion[];
+  materiales: MaterialOpcion[];
 }) {
   const router = useRouter();
 
@@ -144,6 +157,8 @@ export function NuevoPresupuestoForm({
         copia[tarea.id] = {
           cantidad: "1",
           precioUnitario: tarea.precioRef != null ? String(tarea.precioRef) : "",
+          materialId: "",
+          cantidadUsada: "",
         };
       }
       return copia;
@@ -180,11 +195,16 @@ export function NuevoPresupuestoForm({
     // Armamos los ítems a partir de la selección.
     const items = Object.entries(seleccion).map(([tareaId, valores]) => {
       const tarea = tareas.find((t) => t.id === tareaId)!;
+      // El material va solo si se eligió uno y se cargó cantidad usada.
+      const usaMaterial =
+        valores.materialId !== "" && aNumero(valores.cantidadUsada) > 0;
       return {
         descripcion: tarea.descripcion,
         cantidad: aNumero(valores.cantidad),
         precioUnitario: aNumero(valores.precioUnitario),
         categoria: tarea.categoria,
+        materialId: usaMaterial ? valores.materialId : undefined,
+        cantidadUsada: usaMaterial ? aNumero(valores.cantidadUsada) : undefined,
       };
     });
 
@@ -468,6 +488,65 @@ export function NuevoPresupuestoForm({
                             }
                           />
                         </div>
+                        {/* Material del inventario (opcional): descuenta stock
+                            al firmar. Solo si el usuario tiene materiales. */}
+                        {materiales.length > 0 && (
+                          <div className="col-span-2 flex flex-col gap-1">
+                            <Label
+                              htmlFor={`material-${tarea.id}`}
+                              className="text-xs text-muted-foreground"
+                            >
+                              Material del inventario (opcional)
+                            </Label>
+                            <select
+                              id={`material-${tarea.id}`}
+                              value={item.materialId}
+                              onChange={(e) =>
+                                actualizarItem(
+                                  tarea.id,
+                                  "materialId",
+                                  e.target.value,
+                                )
+                              }
+                              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                            >
+                              <option value="">Sin material</option>
+                              {materiales.map((m) => (
+                                <option key={m.id} value={m.id}>
+                                  {m.nombre} (stock: {m.stockActual} {m.unidad})
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+
+                        {item.materialId !== "" && (
+                          <div className="col-span-2 flex flex-col gap-1">
+                            <Label
+                              htmlFor={`usada-${tarea.id}`}
+                              className="text-xs text-muted-foreground"
+                            >
+                              Cantidad de material a usar
+                            </Label>
+                            <Input
+                              id={`usada-${tarea.id}`}
+                              type="number"
+                              inputMode="decimal"
+                              min="0"
+                              step="any"
+                              placeholder="Ej: 3"
+                              value={item.cantidadUsada}
+                              onChange={(e) =>
+                                actualizarItem(
+                                  tarea.id,
+                                  "cantidadUsada",
+                                  e.target.value,
+                                )
+                              }
+                            />
+                          </div>
+                        )}
+
                         <p className="col-span-2 text-right text-sm text-foreground">
                           Subtotal:{" "}
                           <span className="font-semibold">

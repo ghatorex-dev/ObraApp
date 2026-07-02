@@ -79,14 +79,44 @@ export async function crearPresupuesto(
     auditar("cliente.crear", { clienteId: nuevo.id, userId });
   }
 
-  // Recalculamos subtotales y total en el servidor.
-  const items = datos.items.map((item) => ({
-    descripcion: item.descripcion,
-    cantidad: item.cantidad,
-    precioUnitario: item.precioUnitario,
-    subtotal: item.cantidad * item.precioUnitario,
-    categoria: item.categoria,
-  }));
+  // Validamos que los materiales asociados a los ítems sean del usuario.
+  // Traemos los ids válidos de una sola query y descartamos cualquier otro.
+  const materialIdsPedidos = Array.from(
+    new Set(
+      datos.items
+        .map((it) => it.materialId)
+        .filter((id): id is string => Boolean(id)),
+    ),
+  );
+  let materialIdsValidos = new Set<string>();
+  if (materialIdsPedidos.length > 0) {
+    const materiales = await prisma.material.findMany({
+      where: { id: { in: materialIdsPedidos }, userId },
+      select: { id: true },
+    });
+    materialIdsValidos = new Set(materiales.map((m) => m.id));
+    if (materialIdsValidos.size !== materialIdsPedidos.length) {
+      return { ok: false, error: "Uno de los materiales no es válido." };
+    }
+  }
+
+  // Recalculamos subtotales y total en el servidor. Guardamos la asociación
+  // al material solo si es válido (del usuario) y trae cantidad usada.
+  const items = datos.items.map((item) => {
+    const usaMaterial =
+      item.materialId != null &&
+      materialIdsValidos.has(item.materialId) &&
+      item.cantidadUsada != null;
+    return {
+      descripcion: item.descripcion,
+      cantidad: item.cantidad,
+      precioUnitario: item.precioUnitario,
+      subtotal: item.cantidad * item.precioUnitario,
+      categoria: item.categoria,
+      materialId: usaMaterial ? item.materialId! : null,
+      cantidadUsada: usaMaterial ? item.cantidadUsada! : null,
+    };
+  });
   const total = items.reduce((acc, item) => acc + item.subtotal, 0);
 
   // Número autoincremental por usuario.

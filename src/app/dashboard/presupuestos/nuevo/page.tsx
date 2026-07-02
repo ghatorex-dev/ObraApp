@@ -42,6 +42,16 @@ export default async function NuevoPresupuestoPage() {
       })
     : [];
 
+  // Materiales del inventario para el selector opcional por tarea (deducción
+  // automática de stock al firmar).
+  const materiales = userId
+    ? await prisma.material.findMany({
+        where: { userId },
+        orderBy: { nombre: "asc" },
+        select: { id: true, nombre: true, unidad: true, stockActual: true },
+      })
+    : [];
+
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
       {/* Encabezado */}
@@ -61,7 +71,11 @@ export default async function NuevoPresupuestoPage() {
       </header>
 
       <main className="container py-6">
-        <NuevoPresupuestoForm tareas={tareas} clientes={clientes} />
+        <NuevoPresupuestoForm
+          tareas={tareas}
+          clientes={clientes}
+          materiales={materiales}
+        />
       </main>
     </div>
   );

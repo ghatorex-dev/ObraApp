@@ -35,14 +35,27 @@ export const loginSchema = z.object({
 });
 
 // Ítem de un presupuesto.
-export const itemPresupuestoSchema = z.object({
-  descripcion: z.string().trim().min(1, "La tarea necesita una descripción."),
-  cantidad: z.coerce.number().positive("La cantidad debe ser mayor a 0."),
-  precioUnitario: z.coerce
-    .number()
-    .min(0, "El precio no puede ser negativo."),
-  categoria: rubroSchema,
-});
+export const itemPresupuestoSchema = z
+  .object({
+    descripcion: z.string().trim().min(1, "La tarea necesita una descripción."),
+    cantidad: z.coerce.number().positive("La cantidad debe ser mayor a 0."),
+    precioUnitario: z.coerce
+      .number()
+      .min(0, "El precio no puede ser negativo."),
+    categoria: rubroSchema,
+    // Asociación OPCIONAL a un material del inventario para descontar stock al
+    // firmar. El servidor verifica que el material sea del usuario.
+    materialId: z.string().optional(),
+    cantidadUsada: z.coerce
+      .number()
+      .positive("La cantidad usada debe ser mayor a 0.")
+      .optional(),
+  })
+  // Si hay material, la cantidad usada es obligatoria (y viceversa).
+  .refine((it) => !it.materialId || it.cantidadUsada != null, {
+    message: "Indicá cuánto material se usa.",
+    path: ["cantidadUsada"],
+  });
 
 // Creación de un presupuesto completo.
 export const crearPresupuestoSchema = z.object({

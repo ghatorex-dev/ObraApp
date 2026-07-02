@@ -39,7 +39,9 @@ export default async function DetallePresupuestoPage({
   const presupuesto = userId
     ? await prisma.presupuesto.findFirst({
         where: { id: params.id, userId },
-        include: { items: true },
+        include: {
+          items: { include: { material: { select: { nombre: true, unidad: true } } } },
+        },
       })
     : null;
 
@@ -176,6 +178,12 @@ export default async function DetallePresupuestoPage({
                           {item.cantidad} x{" "}
                           {formatearPesos(item.precioUnitario)}
                         </span>
+                        {item.material && item.cantidadUsada != null && (
+                          <span className="text-xs text-muted-foreground">
+                            Usa {item.cantidadUsada} {item.material.unidad} de{" "}
+                            {item.material.nombre}
+                          </span>
+                        )}
                       </div>
                       <span className="shrink-0 font-medium text-foreground">
                         {formatearPesos(item.subtotal)}
