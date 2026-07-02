@@ -2,13 +2,14 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getServerSession } from "next-auth";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, CalendarDays } from "lucide-react";
 
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { formatearPesos } from "@/lib/format";
 import { agruparPorCategoria } from "@/lib/categorias";
 import { estiloEstado } from "@/lib/estados";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PresupuestoAcciones } from "@/components/presupuestos/presupuesto-acciones";
 
@@ -89,6 +90,23 @@ export default async function DetallePresupuestoPage({
           esEjemplo={presupuesto.esEjemplo}
           tokenFirma={presupuesto.tokenFirma}
         />
+
+        {/* Agendar un turno con este presupuesto y su cliente precargados. */}
+        {!presupuesto.esEjemplo && (
+          <Button
+            asChild
+            variant="outline"
+            size="sm"
+            className="w-fit gap-1.5 bg-background text-foreground"
+          >
+            <Link
+              href={`/dashboard/agenda/nuevo?presupuestoId=${presupuesto.id}`}
+            >
+              <CalendarDays className="h-4 w-4" />
+              Agendar turno
+            </Link>
+          </Button>
+        )}
 
         {/* Firma registrada */}
         {presupuesto.estado === "firmado" && presupuesto.firmadoAt && (

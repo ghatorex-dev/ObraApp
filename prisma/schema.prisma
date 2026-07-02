@@ -48,6 +48,7 @@ model User {
   presupuestos       Presupuesto[]
   clientes           Cliente[]
   materiales         Material[]
+  turnos             Turno[]
 }
 
 model Account {
@@ -115,6 +116,7 @@ model Presupuesto {
   // mantienen como snapshot histórico aunque el cliente cambie o se elimine.
   clienteId     String?
   cliente       Cliente?          @relation(fields: [clienteId], references: [id], onDelete: SetNull)
+  turnos        Turno[]
 
   @@index([clienteId])
 }
@@ -132,6 +134,7 @@ model Cliente {
   userId        String
   user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   presupuestos  Presupuesto[]
+  turnos        Turno[]
 
   @@index([userId])
 }
@@ -145,6 +148,39 @@ model ItemPresupuesto {
   categoria      Categoria
   presupuestoId  String
   presupuesto    Presupuesto @relation(fields: [presupuestoId], references: [id], onDelete: Cascade)
+}
+
+// ----------------------------------------------------------------------------
+// Agenda de turnos
+// ----------------------------------------------------------------------------
+
+// Turno de la agenda del usuario. Puede estar suelto, con datos de cliente
+// sueltos (snapshot, como Presupuesto), y/o asociado a un Cliente o a un
+// Presupuesto existentes. Sin notificaciones por ahora (iteración futura).
+model Turno {
+  id            String       @id @default(cuid())
+  titulo        String
+  // Estado: pendiente | confirmado | completado | cancelado
+  estado        String       @default("pendiente")
+  // Inicio del turno (fecha y hora).
+  fecha         DateTime
+  // Fin opcional del turno. Null = sin hora de fin definida.
+  fechaFin      DateTime?
+  notas         String?
+  // Snapshot suelto del cliente (editable, opcional — turno sin cliente OK).
+  clienteNombre String?
+  clienteEmail  String?
+  clienteTel    String?
+  creadoAt      DateTime     @default(now())
+  actualizadoAt DateTime     @updatedAt
+  userId        String
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clienteId     String?
+  cliente       Cliente?     @relation(fields: [clienteId], references: [id], onDelete: SetNull)
+  presupuestoId String?
+  presupuesto   Presupuesto? @relation(fields: [presupuestoId], references: [id], onDelete: SetNull)
+
+  @@index([userId, fecha])
 }
 
 // ----------------------------------------------------------------------------

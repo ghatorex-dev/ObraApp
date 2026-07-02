@@ -117,3 +117,43 @@ export const ajusteStockSchema = z.object({
     .number({ invalid_type_error: "El ajuste debe ser un número." })
     .refine((v) => v !== 0, "El ajuste no puede ser 0."),
 });
+
+// Alta / edición de un turno de la agenda. Las fechas llegan como ISO string
+// desde el cliente y se convierten a Date.
+export const turnoSchema = z
+  .object({
+    titulo: z.string().trim().min(1, "Ingresá un título.").max(160),
+    fecha: z.coerce.date({
+      errorMap: () => ({ message: "Ingresá una fecha y hora válidas." }),
+    }),
+    // Fin opcional; si viene, debe ser posterior al inicio.
+    fechaFin: z.coerce
+      .date({ errorMap: () => ({ message: "Hora de fin inválida." }) })
+      .optional()
+      .nullable(),
+    notas: z.string().trim().max(2000).optional().or(z.literal("")),
+    // Snapshot suelto del cliente (todo opcional: turno suelto válido).
+    clienteNombre: z.string().trim().max(120).optional().or(z.literal("")),
+    clienteEmail: z.preprocess(
+      (valor) =>
+        typeof valor === "string" && valor.trim() === "" ? undefined : valor,
+      z.string().trim().toLowerCase().email("Email inválido.").optional(),
+    ),
+    clienteTel: z.string().trim().max(40).optional().or(z.literal("")),
+    // Asociaciones opcionales (el servidor verifica pertenencia).
+    clienteId: z.string().optional(),
+    presupuestoId: z.string().optional(),
+  })
+  .refine(
+    (datos) => !datos.fechaFin || datos.fechaFin > datos.fecha,
+    { message: "La hora de fin debe ser posterior al inicio.", path: ["fechaFin"] },
+  );
+export type TurnoInput = z.infer<typeof turnoSchema>;
+
+// Estados válidos de un turno (las transiciones se validan en la action).
+export const estadoTurnoSchema = z.enum([
+  "pendiente",
+  "confirmado",
+  "completado",
+  "cancelado",
+]);

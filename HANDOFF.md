@@ -56,7 +56,8 @@ semánticos: `bg-background`, `text-foreground`, `text-muted-foreground`,
 | 9 | **Landing `/`**: hero, rubros (plomería/gas/albañilería/pintura), funcionalidades, precios (Free/Pro), CTA a /registro, footer legal. Corrige copy (decía "electricistas"). + `pdfkit` externo en next.config. | `d44aadf` |
 | — | **Migración** `20260701111640_add_plan_onboarding_ejemplo` (aditiva) aplicada + se trackearon las 3 migraciones base que estaban sin commitear. | `9b9aa93` |
 | **10** | **Fase 2 · Clientes e historial**: modelo `Cliente` (owner + N presupuestos); `Presupuesto.clienteId` opcional (snapshot suelto conservado). `/dashboard/clientes` (listado + buscador por nombre), `/dashboard/clientes/[id]` (detalle + historial de presupuestos), alta/edición (`ClienteForm`, server actions `crearCliente`/`actualizarCliente`). Selector de cliente existente + "Guardar como cliente nuevo" al crear presupuesto (`crearPresupuesto` resuelve/crea cliente). Link "Clientes" en el dashboard. **Migración PENDIENTE de correr por el usuario.** | `03cd7af` |
-| **11** | **Fase 2 · Inventario**: modelo `Material` (nombre, categoria [enum], unidad string, stockActual/stockMinimo Float, owner, `@@index([userId, categoria])`). `/dashboard/inventario` (agrupado por rubro, filtro por chips `?categoria=`, badge rojo "Stock bajo" cuando `stockActual <= stockMinimo`, ajuste rápido −/+ con cantidad editable), alta/edición/baja (`MaterialForm`, baja con confirmación de dos toques). Server actions `crearMaterial`/`actualizarMaterial`/`eliminarMaterial`/`ajustarStock` (Zod + pertenencia + auditoría; ajuste con piso en 0). Aviso de stock bajo en el dashboard (count con referencia de campo `prisma.material.fields.stockMinimo`) + link "Inventario" en el header. **SIN deducción automática de stock por presupuestos** (iteración futura). **Migración PENDIENTE de correr por el usuario.** | `(este)` |
+| **11** | **Fase 2 · Inventario**: modelo `Material` (nombre, categoria [enum], unidad string, stockActual/stockMinimo Float, owner, `@@index([userId, categoria])`). `/dashboard/inventario` (agrupado por rubro, filtro por chips `?categoria=`, badge rojo "Stock bajo" cuando `stockActual <= stockMinimo`, ajuste rápido −/+ con cantidad editable), alta/edición/baja (`MaterialForm`, baja con confirmación de dos toques). Server actions `crearMaterial`/`actualizarMaterial`/`eliminarMaterial`/`ajustarStock` (Zod + pertenencia + auditoría; ajuste con piso en 0). Aviso de stock bajo en el dashboard (count con referencia de campo `prisma.material.fields.stockMinimo`) + link "Inventario" en el header. **SIN deducción automática de stock por presupuestos** (iteración futura). Migración `add_material` corrida y versionada por el usuario. | `6ce47f2` |
+| **12** | **Fase 2 · Agenda/Turnos** (cierra Fase 2): modelo `Turno` (fecha/fechaFin?, titulo, estado String pendiente/confirmado/completado/cancelado, snapshot cliente nombre/email/tel, relaciones OPCIONALES a Cliente y Presupuesto con SetNull, `@@index([userId, fecha])`). `/dashboard/agenda` con **toggle lista/calendario**: lista de próximos turnos (badge por estado, cliente, link al presupuesto) y **calendario mensual propio** (grid de días lunes-domingo, punto en días con turnos, click en día lista sus turnos, navegación de mes) — sin librerías nuevas. Alta/edición en `/nuevo` y `/[id]/editar` (`TurnoForm` con selector de cliente y de presupuesto que precargan el snapshot, editable). "Agendar turno" desde el detalle del presupuesto (`?presupuestoId=` precarga todo). Cambio rápido de estado (`TurnoEstado`) con transiciones válidas (pendiente→confirmado→completado; cancelado desde pendiente/confirmado; finales inmutables). Server actions `crearTurno`/`actualizarTurno`/`cambiarEstadoTurno` (Zod + pertenencia + auditoría `turno.*`). **SIN notificaciones/recordatorios** (iteración futura). **Migración PENDIENTE de correr por el usuario.** | `(este)` |
 
 ## Modelo de datos (Prisma)
 
@@ -77,7 +78,16 @@ planExpiresAt, onboardingComplete (default false), country}` y
   @relation(onDelete: SetNull)` + `@@index([clienteId])`. Los campos
   `clienteNombre/clienteEmail/clienteTel` se **mantienen** como snapshot.
 
-**Módulo 11 (schema listo, migración pendiente):**
+**Módulo 12 (schema listo, migración pendiente):**
+- `Turno { id, titulo, estado String @default("pendiente"), fecha DateTime,
+  fechaFin DateTime?, notas?, clienteNombre?, clienteEmail?, clienteTel?,
+  creadoAt, actualizadoAt, userId (Cascade), clienteId? (SetNull),
+  presupuestoId? (SetNull), @@index([userId, fecha]) }`.
+- Relaciones inversas: `User.turnos`, `Cliente.turnos`, `Presupuesto.turnos`.
+- Estados como String (mismo patrón que `Presupuesto.estado`), validados por
+  Zod; transiciones en `lib/estados-turno.ts`.
+
+**Módulo 11 (schema listo, migración ya corrida y versionada):**
 - `Material { id, nombre, categoria Categoria, unidad String, stockActual
   Float @default(0), stockMinimo Float @default(0), creadoAt, actualizadoAt,
   userId, user (Cascade), @@index([userId, categoria]) }`.
@@ -140,6 +150,14 @@ planExpiresAt, onboardingComplete (default false), country}` y
     (`stockActual: { lte: prisma.material.fields.stockMinimo }`) — GA en Prisma 5.
     El filtro de categoría del listado va por query param (`?categoria=`) con
     Links server-side (sin estado de cliente).
+13. **Agenda (Módulo 12) con fechas en hora local del navegador**: los turnos se
+    guardan como `DateTime` (UTC en la BD); el formulario construye la fecha en
+    hora local y toda la visualización (lista, calendario, agrupado por día) se
+    hace en componentes cliente con la hora local del navegador → el usuario ve
+    los turnos en su huso horario sin configurar nada. El calendario es un grid
+    propio (semana lunes-domingo) sin dependencias nuevas. La "cancelación" de
+    un turno es un cambio de estado (no hay borrado de turnos). Los estados
+    finales (completado/cancelado) no tienen más transiciones.
 
 ## Gotchas importantes
 
@@ -158,36 +176,31 @@ planExpiresAt, onboardingComplete (default false), country}` y
 
 ## Estado actual
 
-- **Módulos 10 (Clientes) y 11 (Inventario)**: schema actualizado y **client de
-  Prisma regenerado** (offline). `npx tsc --noEmit` y **build completo pasan**
-  (25 rutas). Rutas de `/dashboard/clientes/*` y `/dashboard/inventario/*`
-  protegidas por el middleware (verificado: 1 redirect a `/login`, sin loop).
-- ⚠️ **Migraciones de los Módulos 10 y 11 PENDIENTES de correr por el usuario**
-  (ver comando abajo). El directorio `prisma/migrations` del repo solo tiene las
-  4 migraciones hasta `add_plan_onboarding_ejemplo`; la migración `add_cliente`
-  nunca se corrió/commiteó. Hasta correrla(s), `/dashboard/clientes` y
-  `/dashboard/inventario` fallarán en runtime porque las tablas `Cliente` y
-  `Material` no existen todavía en la BD.
+- **Fase 2 completa en código**: Módulos 10 (Clientes), 11 (Inventario) y
+  12 (Agenda). `npx tsc --noEmit` y **build completo pasan** (28 rutas). Rutas
+  de `/dashboard/{clientes,inventario,agenda}/*` protegidas por el middleware
+  (verificado: 1 redirect a `/login`, sin loop).
+- **Migraciones 10 y 11 corridas y versionadas** (se versionaron tarde, después
+  del código): `20260701233447_add_cliente` y `20260702002812_add_material`
+  están en `prisma/migrations/` y aplicadas a la BD → las tablas `Cliente` y
+  `Material` existen.
+- ⚠️ **Migración del Módulo 12 (Turno) PENDIENTE de correr por el usuario**
+  (ver comando abajo). Hasta correrla, `/dashboard/agenda` fallará en runtime
+  porque la tabla `Turno` no existe todavía en la BD.
 - Módulos 1–9: migración previa aplicada, todo pusheado a
   `claude/obraapp-init-oms7y9`.
 
-### Comando de migración de los Módulos 10 + 11 (correr en tu máquina)
+### Comando de migración del Módulo 12 (correr en tu máquina)
 
-Detené el dev server primero (gotcha del lock de DLL en Windows), después
-**un solo comando** cubre ambos módulos (Prisma diffea todo el drift del schema
-en una sola migración):
+Detené el dev server primero (gotcha del lock de DLL en Windows), después:
 
 ```bash
-npx -p dotenv-cli dotenv -e .env.local -- npx prisma migrate dev --name add_cliente_y_material
+npx -p dotenv-cli dotenv -e .env.local -- npx prisma migrate dev --name add_turno
 ```
 
-Es 100% aditiva (CREATE TABLE "Cliente" y "Material" + ADD COLUMN "clienteId" +
-índices), no destructiva, sin backfill. Al terminar, reiniciá el dev server y
-**commiteá la carpeta de migración** que se genera en `prisma/migrations/`.
-
-> Si ya habías corrido `add_cliente` en tu máquina sin commitearla, el comando
-> de arriba solo va a crear la parte de `Material` — usá `--name add_material`
-> en ese caso, y commiteá ambas carpetas de migración.
+Es 100% aditiva (CREATE TABLE "Turno" + FKs + índice [userId, fecha]), no
+destructiva, sin backfill. Al terminar, reiniciá el dev server y **commiteá la
+carpeta de migración** que se genera en `prisma/migrations/`.
 
 ## Pendientes del usuario (no bloquean el funcionamiento)
 

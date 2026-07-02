@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import {
   AlertTriangle,
+  CalendarDays,
   FileText,
   Package,
   Plus,
@@ -120,6 +121,12 @@ export default async function DashboardPage() {
               <Link href="/dashboard/inventario">
                 <Package className="h-4 w-4" />
                 <span className="sr-only sm:not-sr-only">Inventario</span>
+              </Link>
+            </Button>
+            <Button asChild variant="ghost" size="sm" className="gap-1.5">
+              <Link href="/dashboard/agenda">
+                <CalendarDays className="h-4 w-4" />
+                <span className="sr-only sm:not-sr-only">Agenda</span>
               </Link>
             </Button>
             <Button asChild variant="ghost" size="sm" className="gap-1.5">
