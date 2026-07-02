@@ -92,3 +92,28 @@ export const clienteSchema = z.object({
   notas: z.string().trim().max(2000).optional().or(z.literal("")),
 });
 export type ClienteInput = z.infer<typeof clienteSchema>;
+
+// Alta / edición de un material del inventario.
+export const materialSchema = z.object({
+  nombre: z.string().trim().min(1, "Ingresá el nombre del material.").max(120),
+  categoria: rubroSchema,
+  unidad: z
+    .string()
+    .trim()
+    .min(1, "Ingresá la unidad (ej: unidad, metro, litro, kg).")
+    .max(30),
+  stockActual: z.coerce
+    .number({ invalid_type_error: "El stock debe ser un número." })
+    .min(0, "El stock no puede ser negativo."),
+  stockMinimo: z.coerce
+    .number({ invalid_type_error: "El stock mínimo debe ser un número." })
+    .min(0, "El stock mínimo no puede ser negativo."),
+});
+export type MaterialInput = z.infer<typeof materialSchema>;
+
+// Ajuste rápido de stock: cantidad a sumar (positiva) o restar (negativa).
+export const ajusteStockSchema = z.object({
+  delta: z.coerce
+    .number({ invalid_type_error: "El ajuste debe ser un número." })
+    .refine((v) => v !== 0, "El ajuste no puede ser 0."),
+});
