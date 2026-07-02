@@ -2,7 +2,14 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
-import { FileText, Plus, Settings, Users } from "lucide-react";
+import {
+  AlertTriangle,
+  FileText,
+  Package,
+  Plus,
+  Settings,
+  Users,
+} from "lucide-react";
 
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -85,6 +92,17 @@ export default async function DashboardPage() {
       })
     : [];
 
+  // Materiales con stock en o por debajo del mínimo (comparación entre
+  // columnas con referencia de campo de Prisma).
+  const materialesBajoStock = userId
+    ? await prisma.material.count({
+        where: {
+          userId,
+          stockActual: { lte: prisma.material.fields.stockMinimo },
+        },
+      })
+    : 0;
+
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
       {/* Encabezado */}
@@ -96,6 +114,12 @@ export default async function DashboardPage() {
               <Link href="/dashboard/clientes">
                 <Users className="h-4 w-4" />
                 <span className="sr-only sm:not-sr-only">Clientes</span>
+              </Link>
+            </Button>
+            <Button asChild variant="ghost" size="sm" className="gap-1.5">
+              <Link href="/dashboard/inventario">
+                <Package className="h-4 w-4" />
+                <span className="sr-only sm:not-sr-only">Inventario</span>
               </Link>
             </Button>
             <Button asChild variant="ghost" size="sm" className="gap-1.5">
@@ -141,6 +165,19 @@ export default async function DashboardPage() {
               <BotonPro />
             </CardContent>
           </Card>
+        )}
+
+        {/* Aviso de inventario con stock bajo (solo si hay alguno). */}
+        {materialesBajoStock > 0 && (
+          <Link
+            href="/dashboard/inventario"
+            className="flex items-center gap-2 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive hover:bg-destructive/20"
+          >
+            <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden />
+            {materialesBajoStock === 1
+              ? "1 material con stock bajo en tu inventario."
+              : `${materialesBajoStock} materiales con stock bajo en tu inventario.`}
+          </Link>
         )}
 
         {/* Presupuestos recientes */}

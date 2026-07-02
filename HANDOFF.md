@@ -55,7 +55,8 @@ semánticos: `bg-background`, `text-foreground`, `text-muted-foreground`,
 | 8 | **Legales**: `/terminos` y `/privacidad` (públicas, jurisdicción Argentina, Ley 25.326 en privacidad). `LegalShell`/`LegalSeccion` + `Footer` (agregado al dashboard). | `27a2f01` |
 | 9 | **Landing `/`**: hero, rubros (plomería/gas/albañilería/pintura), funcionalidades, precios (Free/Pro), CTA a /registro, footer legal. Corrige copy (decía "electricistas"). + `pdfkit` externo en next.config. | `d44aadf` |
 | — | **Migración** `20260701111640_add_plan_onboarding_ejemplo` (aditiva) aplicada + se trackearon las 3 migraciones base que estaban sin commitear. | `9b9aa93` |
-| **10** | **Fase 2 · Clientes e historial**: modelo `Cliente` (owner + N presupuestos); `Presupuesto.clienteId` opcional (snapshot suelto conservado). `/dashboard/clientes` (listado + buscador por nombre), `/dashboard/clientes/[id]` (detalle + historial de presupuestos), alta/edición (`ClienteForm`, server actions `crearCliente`/`actualizarCliente`). Selector de cliente existente + "Guardar como cliente nuevo" al crear presupuesto (`crearPresupuesto` resuelve/crea cliente). Link "Clientes" en el dashboard. **Migración PENDIENTE de correr por el usuario.** | `(este)` |
+| **10** | **Fase 2 · Clientes e historial**: modelo `Cliente` (owner + N presupuestos); `Presupuesto.clienteId` opcional (snapshot suelto conservado). `/dashboard/clientes` (listado + buscador por nombre), `/dashboard/clientes/[id]` (detalle + historial de presupuestos), alta/edición (`ClienteForm`, server actions `crearCliente`/`actualizarCliente`). Selector de cliente existente + "Guardar como cliente nuevo" al crear presupuesto (`crearPresupuesto` resuelve/crea cliente). Link "Clientes" en el dashboard. **Migración PENDIENTE de correr por el usuario.** | `03cd7af` |
+| **11** | **Fase 2 · Inventario**: modelo `Material` (nombre, categoria [enum], unidad string, stockActual/stockMinimo Float, owner, `@@index([userId, categoria])`). `/dashboard/inventario` (agrupado por rubro, filtro por chips `?categoria=`, badge rojo "Stock bajo" cuando `stockActual <= stockMinimo`, ajuste rápido −/+ con cantidad editable), alta/edición/baja (`MaterialForm`, baja con confirmación de dos toques). Server actions `crearMaterial`/`actualizarMaterial`/`eliminarMaterial`/`ajustarStock` (Zod + pertenencia + auditoría; ajuste con piso en 0). Aviso de stock bajo en el dashboard (count con referencia de campo `prisma.material.fields.stockMinimo`) + link "Inventario" en el header. **SIN deducción automática de stock por presupuestos** (iteración futura). **Migración PENDIENTE de correr por el usuario.** | `(este)` |
 
 ## Modelo de datos (Prisma)
 
@@ -75,6 +76,14 @@ planExpiresAt, onboardingComplete (default false), country}` y
 - `Presupuesto.clienteId String?` + `cliente Cliente?
   @relation(onDelete: SetNull)` + `@@index([clienteId])`. Los campos
   `clienteNombre/clienteEmail/clienteTel` se **mantienen** como snapshot.
+
+**Módulo 11 (schema listo, migración pendiente):**
+- `Material { id, nombre, categoria Categoria, unidad String, stockActual
+  Float @default(0), stockMinimo Float @default(0), creadoAt, actualizadoAt,
+  userId, user (Cascade), @@index([userId, categoria]) }`.
+- `User.materiales Material[]`.
+- Stocks en `Float` a propósito: las unidades incluyen metro/litro/kg
+  (fraccionarios, ej: 2,5 m).
 
 ## Decisiones que se tomaron (con motivo)
 
@@ -122,6 +131,15 @@ planExpiresAt, onboardingComplete (default false), country}` y
     `clienteId` el servidor verifica pertenencia y toma los datos del cliente como
     snapshot; si viene `guardarComoCliente` sin id, crea el cliente. La migración
     es 100% aditiva.
+12. **Inventario (Módulo 11) solo manual**: sin deducción automática de stock al
+    crear/enviar/firmar presupuestos (decisión explícita; iteración futura).
+    `ajustarStock` lee y escribe en dos operaciones secuenciales (compatible con
+    el pooler) con **piso en 0** (nunca stock negativo). Baja de material con
+    confirmación de dos toques (sin modal). El count de stock bajo del dashboard
+    compara columnas con **referencia de campo de Prisma**
+    (`stockActual: { lte: prisma.material.fields.stockMinimo }`) — GA en Prisma 5.
+    El filtro de categoría del listado va por query param (`?categoria=`) con
+    Links server-side (sin estado de cliente).
 
 ## Gotchas importantes
 
@@ -140,27 +158,36 @@ planExpiresAt, onboardingComplete (default false), country}` y
 
 ## Estado actual
 
-- **Módulo 10 (Clientes)**: schema actualizado y **client de Prisma regenerado**
-  (offline). `npx tsc --noEmit` y **build completo pasan** (22 rutas). Rutas de
-  `/dashboard/clientes/*` protegidas por el middleware (verificado: 1 redirect a
-  `/login`, sin loop).
-- ⚠️ **Migración `add_cliente` PENDIENTE de correr por el usuario** (ver comando
-  abajo). Hasta que no se corra, `/dashboard/clientes` y el guardado con cliente
-  fallarán en runtime porque la tabla `Cliente` / la columna `clienteId` no
-  existen todavía en la BD.
+- **Módulos 10 (Clientes) y 11 (Inventario)**: schema actualizado y **client de
+  Prisma regenerado** (offline). `npx tsc --noEmit` y **build completo pasan**
+  (25 rutas). Rutas de `/dashboard/clientes/*` y `/dashboard/inventario/*`
+  protegidas por el middleware (verificado: 1 redirect a `/login`, sin loop).
+- ⚠️ **Migraciones de los Módulos 10 y 11 PENDIENTES de correr por el usuario**
+  (ver comando abajo). El directorio `prisma/migrations` del repo solo tiene las
+  4 migraciones hasta `add_plan_onboarding_ejemplo`; la migración `add_cliente`
+  nunca se corrió/commiteó. Hasta correrla(s), `/dashboard/clientes` y
+  `/dashboard/inventario` fallarán en runtime porque las tablas `Cliente` y
+  `Material` no existen todavía en la BD.
 - Módulos 1–9: migración previa aplicada, todo pusheado a
   `claude/obraapp-init-oms7y9`.
 
-### Comando de migración del Módulo 10 (correr en tu máquina)
+### Comando de migración de los Módulos 10 + 11 (correr en tu máquina)
 
-Detené el dev server primero (gotcha del lock de DLL en Windows), después:
+Detené el dev server primero (gotcha del lock de DLL en Windows), después
+**un solo comando** cubre ambos módulos (Prisma diffea todo el drift del schema
+en una sola migración):
 
 ```bash
-npx -p dotenv-cli dotenv -e .env.local -- npx prisma migrate dev --name add_cliente
+npx -p dotenv-cli dotenv -e .env.local -- npx prisma migrate dev --name add_cliente_y_material
 ```
 
-Es 100% aditiva (CREATE TABLE "Cliente" + ADD COLUMN "clienteId" + índices), no
-destructiva, sin backfill. Reiniciá el dev server al terminar.
+Es 100% aditiva (CREATE TABLE "Cliente" y "Material" + ADD COLUMN "clienteId" +
+índices), no destructiva, sin backfill. Al terminar, reiniciá el dev server y
+**commiteá la carpeta de migración** que se genera en `prisma/migrations/`.
+
+> Si ya habías corrido `add_cliente` en tu máquina sin commitearla, el comando
+> de arriba solo va a crear la parte de `Material` — usá `--name add_material`
+> en ese caso, y commiteá ambas carpetas de migración.
 
 ## Pendientes del usuario (no bloquean el funcionamiento)
 

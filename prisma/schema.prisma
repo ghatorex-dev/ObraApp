@@ -47,6 +47,7 @@ model User {
   sessions           Session[]
   presupuestos       Presupuesto[]
   clientes           Cliente[]
+  materiales         Material[]
 }
 
 model Account {
@@ -144,6 +145,28 @@ model ItemPresupuesto {
   categoria      Categoria
   presupuestoId  String
   presupuesto    Presupuesto @relation(fields: [presupuestoId], references: [id], onDelete: Cascade)
+}
+
+// ----------------------------------------------------------------------------
+// Inventario de materiales
+// ----------------------------------------------------------------------------
+
+// Material del inventario del usuario. Gestión MANUAL de stock: sin deducción
+// automática al crear/enviar/firmar presupuestos (iteración futura).
+model Material {
+  id            String    @id @default(cuid())
+  nombre        String
+  categoria     Categoria
+  // Unidad de medida: unidad, metro, litro, kg, etc.
+  unidad        String
+  stockActual   Float     @default(0)
+  stockMinimo   Float     @default(0)
+  creadoAt      DateTime  @default(now())
+  actualizadoAt DateTime  @updatedAt
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, categoria])
 }
 
 // ----------------------------------------------------------------------------
