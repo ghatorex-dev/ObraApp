@@ -59,7 +59,8 @@ semánticos: `bg-background`, `text-foreground`, `text-muted-foreground`,
 | **11** | **Fase 2 · Inventario**: modelo `Material` (nombre, categoria [enum], unidad string, stockActual/stockMinimo Float, owner, `@@index([userId, categoria])`). `/dashboard/inventario` (agrupado por rubro, filtro por chips `?categoria=`, badge rojo "Stock bajo" cuando `stockActual <= stockMinimo`, ajuste rápido −/+ con cantidad editable), alta/edición/baja (`MaterialForm`, baja con confirmación de dos toques). Server actions `crearMaterial`/`actualizarMaterial`/`eliminarMaterial`/`ajustarStock` (Zod + pertenencia + auditoría; ajuste con piso en 0). Aviso de stock bajo en el dashboard (count con referencia de campo `prisma.material.fields.stockMinimo`) + link "Inventario" en el header. **SIN deducción automática de stock por presupuestos** (iteración futura). Migración `add_material` corrida y versionada por el usuario. | `6ce47f2` |
 | **12** | **Fase 2 · Agenda/Turnos** (cierra Fase 2): modelo `Turno` (fecha/fechaFin?, titulo, estado String pendiente/confirmado/completado/cancelado, snapshot cliente nombre/email/tel, relaciones OPCIONALES a Cliente y Presupuesto con SetNull, `@@index([userId, fecha])`). `/dashboard/agenda` con **toggle lista/calendario**: lista de próximos turnos (badge por estado, cliente, link al presupuesto) y **calendario mensual propio** (grid de días lunes-domingo, punto en días con turnos, click en día lista sus turnos, navegación de mes) — sin librerías nuevas. Alta/edición en `/nuevo` y `/[id]/editar` (`TurnoForm` con selector de cliente y de presupuesto que precargan el snapshot, editable). "Agendar turno" desde el detalle del presupuesto (`?presupuestoId=` precarga todo). Cambio rápido de estado (`TurnoEstado`) con transiciones válidas (pendiente→confirmado→completado; cancelado desde pendiente/confirmado; finales inmutables). Server actions `crearTurno`/`actualizarTurno`/`cambiarEstadoTurno` (Zod + pertenencia + auditoría `turno.*`). **SIN notificaciones/recordatorios** (iteración futura). Migración `add_turno` corrida y versionada por el usuario. | `24f33b2` |
 | **13** | **Fase 3 · Deducción automática de stock al firmar**: `ItemPresupuesto` +`materialId?` (SetNull) +`cantidadUsada?` (`@@index([materialId])`), `Material.itemsUsados`. Selector OPCIONAL de material + cantidad usada por tarea en el form de crear presupuesto (`crearPresupuesto` valida que el material sea del usuario). En `firmarPresupuesto`, al ganar la transición **enviado→firmado** (CAS atómico `updateMany where estado='enviado'`, count===1), descuenta `stockActual -= cantidadUsada` por cada ítem con material — **idempotente** (la transición ocurre una única vez, sin columna marcador). Stock insuficiente: baja hasta 0 (nunca negativo) + audit `material.deduccion_automatica {solicitado, descontado, deficit}` + queda con badge "Stock bajo" en inventario. Nunca bloquea la firma. Deducción secuencial (sin `$transaction`). Detalle del presupuesto muestra "Usa X <unidad> de <material>". Migración `add_item_material` corrida y versionada por el usuario. | `dc97048` |
-| **14** | **Fase 3 · Tareas propias del usuario**: `TareaComunitaria` +`userId String?` (SetNull→Cascade con User) +`@@index([userId])`, `User.tareas`. `userId null` = comunitaria/global (las 20 del seed, para todos); con valor = tarea **propia**, visible solo para su dueño. El selector de `/dashboard/presupuestos/nuevo` filtra `where { activa, OR: [{userId:null},{userId:actual}] }`. Botón **"Agregar tarea nueva"** por rubro dentro del form (`AgregarTareaPropia`): mini-form (descripción + unidad + precio ref. opcional) → server action `crearTareaPropia` (Zod + `userId` + audit `tarea.crear_propia`) → la tarea queda **persistida (reutilizable)** y aparece al instante **auto-tildada** (estado `tareasExtra` + lista mergeada). Compatible con Módulo 13: una tarea propia se asocia igual a un `Material` (el ítem guarda snapshot, no FK a la tarea). **Migración PENDIENTE de correr por el usuario.** | `(este)` |
+| **14** | **Fase 3 · Tareas propias del usuario**: `TareaComunitaria` +`userId String?` (SetNull→Cascade con User) +`@@index([userId])`, `User.tareas`. `userId null` = comunitaria/global (las 20 del seed, para todos); con valor = tarea **propia**, visible solo para su dueño. El selector de `/dashboard/presupuestos/nuevo` filtra `where { activa, OR: [{userId:null},{userId:actual}] }`. Botón **"Agregar tarea nueva"** por rubro dentro del form (`AgregarTareaPropia`): mini-form (descripción + unidad + precio ref. opcional) → server action `crearTareaPropia` (Zod + `userId` + audit `tarea.crear_propia`) → la tarea queda **persistida (reutilizable)** y aparece al instante **auto-tildada** (estado `tareasExtra` + lista mergeada). Compatible con Módulo 13: una tarea propia se asocia igual a un `Material` (el ítem guarda snapshot, no FK a la tarea). Migración `add_tarea_propia` corrida y versionada por el usuario. | `4a87f50` |
+| **15** | **Fase 2 · Banners de afiliados**: modelo `BannerAfiliado` (titulo, imagenUrl, linkDestino, `categoria Categoria?` [null=genérico], `activo` default true, `orden` Int, `@@index([activo,categoria,orden])`) — contenido **global** (sin userId), gestionado solo por admin. Sección **"Banners"** en `/admin` (`BannersAdmin`): alta/edición/activar-desactivar/borrar. Server actions `crearBanner`/`actualizarBanner`/`alternarActivoBanner`/`eliminarBanner` con **Zod** (`.url()` en ambas URLs), **re-verificación de admin contra la BD en cada action**, auditoría `banner.crear`/`actualizar`/`eliminar`. Visualización: server component `BannersAfiliados({ categorias? })` — activos por rubro del contexto + genéricos, ordenados por `orden`; **si no hay, devuelve null (estado vacío silencioso)**. Placements: genéricos en `/dashboard`, por rubro en el detalle del presupuesto. Links `target="_blank" rel="noopener noreferrer"`, `<img>` (CSP ya permite https). Sin tracking de clicks. **Migración PENDIENTE de correr por el usuario.** | `(este)` |
 
 ## Modelo de datos (Prisma)
 
@@ -79,6 +80,12 @@ planExpiresAt, onboardingComplete (default false), country}` y
 - `Presupuesto.clienteId String?` + `cliente Cliente?
   @relation(onDelete: SetNull)` + `@@index([clienteId])`. Los campos
   `clienteNombre/clienteEmail/clienteTel` se **mantienen** como snapshot.
+
+**Módulo 15 (schema listo, migración pendiente):**
+- `BannerAfiliado { id, titulo, imagenUrl, linkDestino, categoria Categoria?,
+  activo Boolean @default(true), orden Int @default(0), creadoAt,
+  @@index([activo, categoria, orden]) }`. Global (sin relación a User). No hay
+  cambios en otros modelos.
 
 **Módulo 14 (schema listo, migración pendiente):**
 - `TareaComunitaria` +`userId String?` +`user User? @relation(onDelete:
@@ -202,33 +209,33 @@ planExpiresAt, onboardingComplete (default false), country}` y
 
 ## Estado actual
 
-- **Módulo 14 (tareas propias del usuario)**: schema actualizado y **client de
-  Prisma regenerado** (offline). `npx tsc --noEmit` y **build completo pasan**
-  (28 rutas).
-- **Migraciones 10–13 corridas y versionadas**: `add_cliente`, `add_material`,
-  `add_turno` y `add_item_material` están en `prisma/migrations/` y aplicadas →
-  las tablas/columnas de Clientes, Inventario, Agenda y la deducción de stock
-  existen.
-- ⚠️ **Migración del Módulo 14 PENDIENTE de correr por el usuario** (ver comando
-  abajo). Es aditiva sobre `TareaComunitaria` (+`userId` nullable, +FK a User,
-  +índice). Hasta correrla, `/dashboard/presupuestos/nuevo` fallará en runtime
-  (la columna `userId` no existe). Las 20 filas del seed quedan con `userId`
-  null → siguen comunitarias.
+- **Módulo 15 (banners de afiliados)**: schema actualizado y **client de Prisma
+  regenerado** (offline). `npx tsc --noEmit` y **build completo pasan** (28
+  rutas). `/admin` y `/dashboard` verificadas: protegidas por el middleware (1
+  redirect a `/login`, sin loop).
+- **Migraciones 10–14 corridas y versionadas**: `add_cliente`, `add_material`,
+  `add_turno`, `add_item_material` y `add_tarea_propia` están en
+  `prisma/migrations/` y aplicadas.
+- ⚠️ **Migración del Módulo 15 PENDIENTE de correr por el usuario** (ver comando
+  abajo). Es aditiva (nueva tabla `BannerAfiliado`, nada más). Hasta correrla,
+  `/admin` y las páginas con `BannersAfiliados` (`/dashboard`, detalle de
+  presupuesto) fallarán en runtime porque la tabla no existe. Sin banners
+  cargados, la sección de visualización no muestra nada (estado vacío
+  silencioso).
 - Módulos 1–9: migración previa aplicada, todo pusheado a
   `claude/obraapp-init-oms7y9`.
 
-### Comando de migración del Módulo 14 (correr en tu máquina)
+### Comando de migración del Módulo 15 (correr en tu máquina)
 
 Detené el dev server primero (gotcha del lock de DLL en Windows), después:
 
 ```bash
-npx -p dotenv-cli dotenv -e .env.local -- npx prisma migrate dev --name add_tarea_propia
+npx -p dotenv-cli dotenv -e .env.local -- npx prisma migrate dev --name add_banner_afiliado
 ```
 
-Es 100% aditiva (ALTER TABLE "TareaComunitaria" ADD "userId" + FK a "User" +
-índice), no
-destructiva, sin backfill. Al terminar, reiniciá el dev server y **commiteá la
-carpeta de migración** que se genera en `prisma/migrations/`.
+Es 100% aditiva (CREATE TABLE "BannerAfiliado" + índice), no destructiva, sin
+backfill. Al terminar, reiniciá el dev server y **commiteá la carpeta de
+migración** que se genera en `prisma/migrations/`.
 
 ## Pendientes del usuario (no bloquean el funcionamiento)
 

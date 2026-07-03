@@ -237,3 +237,27 @@ model TareaComunitaria {
 
   @@index([userId])
 }
+
+// ----------------------------------------------------------------------------
+// Banners de afiliados
+// ----------------------------------------------------------------------------
+
+// Banner publicitario de un programa de afiliados. Es contenido GLOBAL,
+// gestionado solo por el admin (no pertenece a un usuario). Se muestra a los
+// usuarios filtrado por rubro. Sin tracking de clicks por ahora.
+model BannerAfiliado {
+  id          String     @id @default(cuid())
+  titulo      String
+  // URL externa de la imagen del banner (sin upload de archivos por ahora).
+  imagenUrl   String
+  // URL de destino del afiliado (se abre en pestaña nueva).
+  linkDestino String
+  // Rubro del banner. null = genérico (aplica a todos los rubros).
+  categoria   Categoria?
+  activo      Boolean    @default(true)
+  // Prioridad de aparición cuando hay varios (menor = primero).
+  orden       Int        @default(0)
+  creadoAt    DateTime   @default(now())
+
+  @@index([activo, categoria, orden])
+}

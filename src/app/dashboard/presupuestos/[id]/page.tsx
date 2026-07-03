@@ -8,6 +8,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { formatearPesos } from "@/lib/format";
 import { agruparPorCategoria } from "@/lib/categorias";
+import { BannersAfiliados } from "@/components/banners/banners-afiliados";
 import { estiloEstado } from "@/lib/estados";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -229,6 +230,10 @@ export default async function DetallePresupuestoPage({
             </CardContent>
           </Card>
         )}
+
+        {/* Banners de afiliados de los rubros de este presupuesto + genéricos
+            (si no hay ninguno, no renderiza nada). */}
+        <BannersAfiliados categorias={grupos.map((g) => g.categoria)} />
       </main>
     </div>
   );

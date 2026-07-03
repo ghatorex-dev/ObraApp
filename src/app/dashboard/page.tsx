@@ -21,6 +21,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { LogoutButton } from "@/components/auth/logout-button";
 import { BotonPro } from "@/components/plan/boton-pro";
 import { Footer } from "@/components/legal/footer";
+import { BannersAfiliados } from "@/components/banners/banners-afiliados";
 
 export const metadata: Metadata = {
   title: "Panel — ObraApp",
@@ -252,6 +253,9 @@ export default async function DashboardPage() {
             </ul>
           )}
         </section>
+
+        {/* Banners de afiliados genéricos (si no hay, no renderiza nada). */}
+        <BannersAfiliados />
       </main>
 
       <Footer />

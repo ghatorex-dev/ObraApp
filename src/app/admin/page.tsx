@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
-import { ArrowLeft, Users, FileText } from "lucide-react";
+import { ArrowLeft, Users, FileText, Megaphone } from "lucide-react";
 
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -10,6 +10,7 @@ import { esEmailAdmin } from "@/lib/admin";
 import { esProActivo } from "@/lib/plan";
 import { formatearPesos } from "@/lib/format";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { BannersAdmin } from "@/components/admin/banners-admin";
 
 export const metadata: Metadata = {
   title: "Admin — ObraApp",
@@ -58,6 +59,20 @@ export default async function AdminPage() {
       _sum: { total: true },
     }),
   ]);
+
+  // Banners de afiliados (contenido global, gestionado por el admin).
+  const banners = await prisma.bannerAfiliado.findMany({
+    orderBy: [{ orden: "asc" }, { creadoAt: "desc" }],
+    select: {
+      id: true,
+      titulo: true,
+      imagenUrl: true,
+      linkDestino: true,
+      categoria: true,
+      activo: true,
+      orden: true,
+    },
+  });
 
   const porUsuario = new Map(
     agregados.map((a) => [
@@ -186,6 +201,19 @@ export default async function AdminPage() {
                 })}
               </tbody>
             </table>
+          </CardContent>
+        </Card>
+
+        {/* Sección: Banners de afiliados */}
+        <Card className="bg-card text-card-foreground">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base text-card-foreground">
+              <Megaphone className="h-4 w-4" aria-hidden />
+              Banners ({banners.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <BannersAdmin banners={banners} />
           </CardContent>
         </Card>
       </main>

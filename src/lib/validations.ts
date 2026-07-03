@@ -191,3 +191,23 @@ export const tareaPropiaSchema = z.object({
     .optional(),
 });
 export type TareaPropiaInput = z.infer<typeof tareaPropiaSchema>;
+
+// Alta / edición de un banner de afiliado (solo admin).
+export const bannerSchema = z.object({
+  titulo: z.string().trim().min(1, "Ingresá un título.").max(160),
+  imagenUrl: z
+    .string()
+    .trim()
+    .url("La URL de la imagen no es válida.")
+    .max(2000),
+  linkDestino: z
+    .string()
+    .trim()
+    .url("La URL de destino no es válida.")
+    .max(2000),
+  // Rubro del banner. "" o ausente = genérico (todas las categorías).
+  categoria: rubroSchema.optional().or(z.literal("")),
+  orden: z.coerce.number().int("El orden debe ser un entero.").min(0).default(0),
+  activo: z.boolean().optional(),
+});
+export type BannerInput = z.infer<typeof bannerSchema>;
