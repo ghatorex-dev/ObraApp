@@ -9,12 +9,14 @@ import {
   Package,
   Plus,
   Settings,
+  ShieldCheck,
   Users,
 } from "lucide-react";
 
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { formatearPesos } from "@/lib/format";
+import { esEmailAdmin } from "@/lib/admin";
 import { esProActivo } from "@/lib/plan";
 import { procesarReferidos, resumenComisiones } from "@/lib/referidos";
 import { Button } from "@/components/ui/button";
@@ -69,16 +71,26 @@ export default async function DashboardPage() {
   // middleware). Si no completó el onboarding, lo mandamos ahí. No hay loop:
   // /onboarding redirige a /dashboard solo cuando SÍ está completo.
   let esPro = false;
+  // Si el usuario actual es el admin (verificado contra la BD, no contra la
+  // sesión): controla solo si se muestra el link "Admin" en la navegación.
+  let esAdmin = false;
   // Estado del programa de referidos (null hasta tener código).
   let codigoReferido: string | null = null;
   let resumenRef: Awaited<ReturnType<typeof resumenComisiones>> | null = null;
   if (userId) {
     const usuario = await prisma.user.findUnique({
       where: { id: userId },
-      select: { onboardingComplete: true, plan: true, planExpiresAt: true },
+      select: {
+        onboardingComplete: true,
+        plan: true,
+        planExpiresAt: true,
+        email: true,
+      },
     });
     if (!usuario?.onboardingComplete) redirect("/onboarding");
     esPro = usuario ? esProActivo(usuario) : false;
+    // Mismo criterio que /admin: el email leído de la BD contra ADMIN_EMAIL.
+    esAdmin = esEmailAdmin(usuario?.email);
 
     // Programa de referidos (perezoso, tolerante a fallos): asigna referidor
     // desde la cookie, asegura el código propio, genera la comisión si recién
@@ -148,6 +160,17 @@ export default async function DashboardPage() {
                 <span className="sr-only sm:not-sr-only">Agenda</span>
               </Link>
             </Button>
+            {/* Link "Admin": solo visible si el usuario actual es el admin
+                (verificado server-side contra la BD). No reemplaza la
+                protección de /admin, que sigue validando en cada request. */}
+            {esAdmin && (
+              <Button asChild variant="ghost" size="sm" className="gap-1.5">
+                <Link href="/admin">
+                  <ShieldCheck className="h-4 w-4" />
+                  <span className="sr-only sm:not-sr-only">Admin</span>
+                </Link>
+              </Button>
+            )}
             <Button asChild variant="ghost" size="sm" className="gap-1.5">
               <Link href="/dashboard/configuracion">
                 <Settings className="h-4 w-4" />
