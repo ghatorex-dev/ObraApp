@@ -30,6 +30,30 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith("/admin");
   const esRutaAuth = pathname === "/login" || pathname === "/registro";
 
+  // Captura del código de referido. Si llega ?ref=CODIGO a /registro (y no hay
+  // sesión), lo guardamos en una cookie httpOnly de corta duración (10 min).
+  // Así podemos asociar el referidor DESPUÉS del alta, sin importar el método:
+  // credenciales (lo lee /api/registro) o Google (lo lee events.createUser).
+  // El nombre de la cookie está hardcodeado a propósito: este middleware corre
+  // en el runtime Edge y no puede importar @/lib/referidos (usa Prisma).
+  if (pathname === "/registro" && !autenticado) {
+    const ref = request.nextUrl.searchParams.get("ref");
+    if (ref) {
+      const codigo = ref.replace(/[^A-Za-z0-9]/g, "").slice(0, 16).toUpperCase();
+      const respuesta = NextResponse.next();
+      if (codigo) {
+        respuesta.cookies.set("ref_obraapp", codigo, {
+          httpOnly: true,
+          sameSite: "lax",
+          secure: process.env.NODE_ENV === "production",
+          maxAge: 600, // 10 minutos
+          path: "/",
+        });
+      }
+      return respuesta;
+    }
+  }
+
   // Sin sesión intentando entrar a una ruta protegida -> a /login,
   // recordando el destino original para volver después de ingresar.
   if (esRutaProtegida && !autenticado) {

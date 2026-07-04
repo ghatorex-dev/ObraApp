@@ -2,15 +2,17 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
-import { ArrowLeft, Users, FileText, Megaphone } from "lucide-react";
+import { ArrowLeft, Users, FileText, Megaphone, Gift } from "lucide-react";
 
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { esEmailAdmin } from "@/lib/admin";
 import { esProActivo } from "@/lib/plan";
+import { reconciliarTodasPendientes } from "@/lib/referidos";
 import { formatearPesos } from "@/lib/format";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BannersAdmin } from "@/components/admin/banners-admin";
+import { ComisionesAdmin } from "@/components/admin/comisiones-admin";
 
 export const metadata: Metadata = {
   title: "Admin — ObraApp",
@@ -73,6 +75,29 @@ export default async function AdminPage() {
       orden: true,
     },
   });
+
+  // Programa de referidos: reconciliamos TODAS las comisiones vencidas para que
+  // la lista esté al día aunque el referido no vuelva a entrar, y traemos las
+  // que quedaron listas para pagar.
+  await reconciliarTodasPendientes();
+  const comisiones = await prisma.comision.findMany({
+    where: { estado: "lista_para_pagar" },
+    orderBy: { fechaComisionable: "asc" },
+    select: {
+      id: true,
+      monto: true,
+      fechaComisionable: true,
+      referidor: { select: { email: true } },
+      referido: { select: { email: true } },
+    },
+  });
+  const comisionesRows = comisiones.map((c) => ({
+    id: c.id,
+    referidorEmail: c.referidor.email,
+    referidoEmail: c.referido.email,
+    monto: c.monto,
+    fechaComisionable: formatoFecha.format(c.fechaComisionable),
+  }));
 
   const porUsuario = new Map(
     agregados.map((a) => [
@@ -201,6 +226,19 @@ export default async function AdminPage() {
                 })}
               </tbody>
             </table>
+          </CardContent>
+        </Card>
+
+        {/* Sección: Comisiones de referidos listas para pagar */}
+        <Card className="bg-card text-card-foreground">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base text-card-foreground">
+              <Gift className="h-4 w-4" aria-hidden />
+              Comisiones a pagar ({comisionesRows.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ComisionesAdmin comisiones={comisionesRows} />
           </CardContent>
         </Card>
 

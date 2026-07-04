@@ -27,29 +27,38 @@ enum Categoria {
 // ----------------------------------------------------------------------------
 
 model User {
-  id                 String             @id @default(cuid())
-  name               String?
-  email              String             @unique
-  emailVerified      DateTime?
-  image              String?
+  id                  String             @id @default(cuid())
+  name                String?
+  email               String             @unique
+  emailVerified       DateTime?
+  image               String?
   // Contraseña hasheada con bcrypt. Opcional: los usuarios de Google no tienen.
-  hashedPassword     String?
+  hashedPassword      String?
   // Plan comercial: "free" | "pro".
-  plan               String             @default("free")
+  plan                String             @default("free")
   // Vencimiento del plan Pro (null si es Free o sin vencimiento).
-  planExpiresAt      DateTime?
+  planExpiresAt       DateTime?
   // Onboarding completado (nombre + país).
-  onboardingComplete Boolean            @default(false)
+  onboardingComplete  Boolean            @default(false)
   // País del usuario (Argentina por defecto en el onboarding).
-  country            String?
-  createdAt          DateTime           @default(now())
-  accounts           Account[]
-  sessions           Session[]
-  presupuestos       Presupuesto[]
-  clientes           Cliente[]
-  materiales         Material[]
-  turnos             Turno[]
-  tareas             TareaComunitaria[]
+  country             String?
+  createdAt           DateTime           @default(now())
+  // Código propio de referido (alfanumérico corto). Se genera perezosamente en
+  // la primera visita al dashboard (cubre cuentas por credenciales y Google).
+  codigoReferido      String?            @unique
+  // Quién trajo a este usuario (self-relation). SetNull si el referidor se borra.
+  referidoPorId       String?
+  referidoPor         User?              @relation("Referidos", fields: [referidoPorId], references: [id], onDelete: SetNull)
+  referidos           User[]             @relation("Referidos")
+  accounts            Account[]
+  sessions            Session[]
+  presupuestos        Presupuesto[]
+  clientes            Cliente[]
+  materiales          Material[]
+  turnos              Turno[]
+  tareas              TareaComunitaria[]
+  comisionesGanadas   Comision[]         @relation("ComisionesGanadas")
+  comisionesGeneradas Comision[]         @relation("ComisionesGeneradas")
 }
 
 model Account {
@@ -236,6 +245,33 @@ model TareaComunitaria {
   user        User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+}
+
+// ----------------------------------------------------------------------------
+// Programa de referidos
+// ----------------------------------------------------------------------------
+
+// Comisión que gana un referidor cuando su referido se hace Pro y se mantiene
+// 30 días. El pago es MANUAL (fuera del sistema); acá solo se calcula el estado
+// y se marca como pagada desde /admin.
+model Comision {
+  id                String    @id @default(cuid())
+  referidorId       String
+  referidor         User      @relation("ComisionesGanadas", fields: [referidorId], references: [id], onDelete: Cascade)
+  referidoId        String
+  referido          User      @relation("ComisionesGeneradas", fields: [referidoId], references: [id], onDelete: Cascade)
+  // Monto guardado en la fila (no hardcodeado en la lógica). Default 0.49 USD.
+  monto             Float     @default(0.49)
+  // Estado: pendiente | lista_para_pagar | pagada | cancelada
+  estado            String    @default("pendiente")
+  // Fecha en que se cumplen los 30 días desde que el referido se hizo Pro.
+  fechaComisionable DateTime
+  fechaPagada       DateTime?
+  creadoAt          DateTime  @default(now())
+
+  // Una única comisión por referido, para siempre (regla "por única vez").
+  @@unique([referidoId])
+  @@index([estado])
 }
 
 // ----------------------------------------------------------------------------

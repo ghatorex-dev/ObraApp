@@ -29,6 +29,11 @@ export type EventoAuditoria =
   | "config.actualizar"
   | "cuenta.eliminar.solicitud"
   | "plan.upgrade.iniciar"
+  | "referido.asignado"
+  | "comision.generada"
+  | "comision.lista"
+  | "comision.cancelada"
+  | "comision.marcada_pagada"
   | "admin.accion"
   | "ratelimit.bloqueo";
 

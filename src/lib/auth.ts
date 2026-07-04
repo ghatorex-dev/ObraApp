@@ -7,6 +7,7 @@ import bcrypt from "bcrypt";
 import { prisma } from "@/lib/prisma";
 import { loginSchema } from "@/lib/validations";
 import { auditar } from "@/lib/audit-log";
+import { asignarReferidorDesdeCookie } from "@/lib/referidos";
 
 const esProd = process.env.NODE_ENV === "production";
 
@@ -31,6 +32,12 @@ export const authOptions: NextAuthOptions = {
     },
     async signOut({ token }) {
       auditar("logout", { userId: (token?.id as string | undefined) ?? null });
+    },
+    // Solo se dispara para altas vía adapter (Google u otro OAuth), NO para
+    // credenciales. Capturamos el referido desde la cookie para el usuario
+    // recién creado. Nunca bloquea el registro/login (la función es tolerante).
+    async createUser({ user }) {
+      await asignarReferidorDesdeCookie(user.id);
     },
   },
   // Configuración explícita de la cookie de sesión: endurecida.

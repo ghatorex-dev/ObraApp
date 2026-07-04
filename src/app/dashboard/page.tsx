@@ -16,12 +16,14 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { formatearPesos } from "@/lib/format";
 import { esProActivo } from "@/lib/plan";
+import { procesarReferidos, resumenComisiones } from "@/lib/referidos";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { LogoutButton } from "@/components/auth/logout-button";
 import { BotonPro } from "@/components/plan/boton-pro";
 import { Footer } from "@/components/legal/footer";
 import { BannersAfiliados } from "@/components/banners/banners-afiliados";
+import { ReferidosCard } from "@/components/referidos/referidos-card";
 
 export const metadata: Metadata = {
   title: "Panel — ObraApp",
@@ -67,6 +69,9 @@ export default async function DashboardPage() {
   // middleware). Si no completó el onboarding, lo mandamos ahí. No hay loop:
   // /onboarding redirige a /dashboard solo cuando SÍ está completo.
   let esPro = false;
+  // Estado del programa de referidos (null hasta tener código).
+  let codigoReferido: string | null = null;
+  let resumenRef: Awaited<ReturnType<typeof resumenComisiones>> | null = null;
   if (userId) {
     const usuario = await prisma.user.findUnique({
       where: { id: userId },
@@ -74,6 +79,19 @@ export default async function DashboardPage() {
     });
     if (!usuario?.onboardingComplete) redirect("/onboarding");
     esPro = usuario ? esProActivo(usuario) : false;
+
+    // Programa de referidos (perezoso, tolerante a fallos): asigna referidor
+    // desde la cookie, asegura el código propio, genera la comisión si recién
+    // se hizo Pro y reconcilia las comisiones vencidas que lo involucran.
+    await procesarReferidos(userId);
+    const conCodigo = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { codigoReferido: true },
+    });
+    codigoReferido = conCodigo?.codigoReferido ?? null;
+    if (codigoReferido) {
+      resumenRef = await resumenComisiones(userId);
+    }
   }
 
   // Presupuestos recientes del usuario (vacío si no hay ninguno).
@@ -253,6 +271,20 @@ export default async function DashboardPage() {
             </ul>
           )}
         </section>
+
+        {/* Programa de referidos: link propio + estado de las comisiones. */}
+        {codigoReferido && resumenRef && (
+          <ReferidosCard
+            codigo={codigoReferido}
+            cantidadReferidos={resumenRef.cantidadReferidos}
+            pendientes={resumenRef.pendientes}
+            listasParaPagar={resumenRef.listasParaPagar}
+            pagadas={resumenRef.pagadas}
+            montoPorCobrar={resumenRef.montoPorCobrar}
+            montoCobrado={resumenRef.montoCobrado}
+            totalAcumulado={resumenRef.totalAcumulado}
+          />
+        )}
 
         {/* Banners de afiliados genéricos (si no hay, no renderiza nada). */}
         <BannersAfiliados />
